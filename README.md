@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://gitee.com/xywu1990/tedq">
+  <a href="https://github.com/JDEA-Quantum-Lab/TeD-Q">
     <img width=50% src="/TeD-Q.png">
   </a>
 </p>
@@ -24,7 +24,7 @@ TeD-Q is an open-source software framework for quantum machine learning, variati
 ```
 pip install numpy torch jax jaxlib matplotlib panel jupyterlab ipywidgets toolz ray
 ```
-It is strongly recommended to install and use [JDtensorPath](https://gitee.com/xywu1990/jd-tensor-path) for tensor network contraction mode.
+It is strongly recommended to install and use [JDtensorPath](https://github.com/JDEA-Quantum-Lab/JDtensorPath) for tensor network contraction mode.
 #### Install
 ```
 pip install -e .
@@ -117,7 +117,7 @@ For more diverse examples of using TeD-Q to solve quantum machine learning probl
 #### [2D Many Body Localization](/examples/Many_body_Localization_2D.ipynb)
 
 ## Authors
-TeD-Q is released by JD Explore Academy and currently maintained by [Xingyao Wu](https://gitee.com/xywu1990). The project is not possible without the efforts made by our [contributors](https://gitee.com/xywu1990/tedq/contributors?ref=master).
+TeD-Q is released by JD Explore Academy and currently maintained by [Xingyao Wu](https://github.com/xywu1990). The project is not possible without the efforts made by our [contributors](https://github.com/JDEA-Quantum-Lab/TeD-Q/graphs/contributors).
 
 ## License
 TeD-Q is free and open source, released under the Apache License, Version 2.0.
