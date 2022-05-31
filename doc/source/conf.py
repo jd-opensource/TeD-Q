@@ -16,8 +16,8 @@ print(sys.executable)
 sys.path.insert(0, os.path.abspath('../..'))
 # -- Project information -----------------------------------------------------
 
-project = 'JDQAI'
-copyright = '2021, XY Wu, YC Chen and C.-Y. Kuo'
+project = 'TeD-Q'
+copyright = '2022 Jingdong Technology Information Technology Co., Ltd.'
 author = 'XY Wu, YC Chen and C.-Y. Kuo'
 
 # The full version, including alpha/beta/rc tags
