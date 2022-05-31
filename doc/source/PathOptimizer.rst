@@ -79,20 +79,20 @@ The JDOptTN module will use the optimal contraction path to compute the tensor n
 
 	
 
-Jingdong Optimizer for Tensor Network
-=======================================
-.. automodule:: tedq.JD_opt_tn.JD_opt_tn
-	:members:
-	:undoc-members:
+.. Jingdong Optimizer for Tensor Network
+.. =======================================
+.. .. automodule:: tedq.JD_opt_tn.JD_opt_tn
+.. 	:members:
+.. 	:undoc-members:
 
-Build tree
-============
-.. automodule:: tedq.JD_opt_tn.build_tree
-	:members:
-	:undoc-members:
+.. Build tree
+.. ============
+.. .. automodule:: tedq.JD_opt_tn.build_tree
+.. 	:members:
+.. 	:undoc-members:
 
-Gen Trials
-============
-.. automodule:: tedq.JD_opt_tn.gen_trials
-	:members:
-	:undoc-members:
+.. Gen Trials
+.. ============
+.. .. automodule:: tedq.JD_opt_tn.gen_trials
+.. 	:members:
+.. 	:undoc-members:
