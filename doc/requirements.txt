@@ -10,3 +10,4 @@ jupyterlab
 ipywidgets
 toolz
 ray
+qiskit
