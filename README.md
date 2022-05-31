@@ -106,7 +106,7 @@ print(circuit)
 Follow the tutorial and the examples below to learn more usage of the TeD-Q framework.
 
 ## Tutorial and examples
-For more diverse examples of using TeD-Q to solve quantum machine learning problem and variational quantum algorithm, please refer to the following tutorials or our official [documentation](https://tedq.readthedocs.io) website.
+For more diverse examples of using TeD-Q to solve quantum machine learning problem and variational quantum algorithm, please refer to the following tutorials or our official [documentation](https://ted-q.readthedocs.io) website.
 #### [Qubit rotation](/examples/Qubit_rotation.ipynb)
 #### [QNN circuit example](/examples/QNN_circuit_example.ipynb)
 #### [Quanvolution neural network](/examples/Quanvolution_neural_network.ipynb)
