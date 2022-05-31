@@ -1,3 +1,12 @@
 sphinx
 nbsphinx
 numpy
+torch
+jax
+jaxlib
+matplotlib
+panel
+jupyterlab
+ipywidgets
+toolz
+ray
