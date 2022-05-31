@@ -1,0 +1,10 @@
+.DS_Store
+*.pyc
+
+# folders to exclude
+.ipynb_checkpoints
+__pycache__/
+doc/build/
+old_examples/
+useful_ipynb/
+example/developing/
