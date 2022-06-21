@@ -392,7 +392,11 @@ class CompiledCircuit:
         execute quantum circuit to get the measurement result.
         '''
 
-        self._update_parameters(*params)
+        if len(params) == 0:
+            pass
+            
+        else:
+            self._update_parameters(*params)
 
     def _parser_circuit(self):
         '''
