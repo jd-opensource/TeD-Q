@@ -22,6 +22,7 @@ by QInterpreter, as well as their simple properties.
 import cmath
 import math
 import numpy as np
+from copy import deepcopy
 
 from .ops_abc import ObservableBase, GateBase
 
@@ -1604,6 +1605,70 @@ class CRZ(GateBase):
         return CRZ(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
 
 
+class Unitary(GateBase):
+    r"""Unitary(qubits)
+    Unitary gate operator.
+    The matrix form is:
+
+
+    **Properties**
+        * # of qubits: Any
+        * # of parameters: 0
+
+    Args:
+        qubits (List[int]): The qubits this gate acts on
+    """
+    _num_params = 0
+    _num_qubits = None
+
+    def __init__(self, matrix, qubits: list, do_queue: bool = True, **kwargs):
+
+        self._num_qubits = len(qubits)
+        self._user_defined_matrix = matrix
+
+        super().__init__(qubits=qubits, do_queue=do_queue, **kwargs)
+
+
+    def get_matrix(self):
+        r"""Get the matrix representation of an operator instance in computational basis
+        """
+        return self._user_defined_matrix
+
+
+    def adjoint(self, do_queue=False):
+        """Get the adjoint operator of this gate operator.
+
+        Adjoint operator tensor is the transposed conjugated tensor of the original gate operator tensor.
+        For unitary gate operator, the tensor of adjoint operator is equivalent to the inverse tensor of original gate operator tensor.
+
+        Args:
+            do_queue (bool): Optional, default is False. Indicates whether this operator will appear in the quantum circuit.
+
+        Returns:
+            GateBase: the adjoint gate
+
+        """
+        ccj_matrix = deepcopy(self.matrix)
+        ccj_matrix = complex_conjugate(ccj_matrix)
+
+        return Unitary(ccj_matrix, qubits=self.qubits, do_queue=do_queue)
+
+
+def complex_conjugate(ts):
+    '''
+    obtain complex conjugate
+    '''
+    shape = ts.shape
+    prod_shape = np.prod(shape)
+    new_size = np.sqrt(prod_shape).astype(int)
+    new_shape = (new_size, new_size)
+    ts = ts.reshape(new_shape)
+    ts = ts.conj()
+    ts = ts.T
+    ts = ts.reshape(shape)
+    return ts
+
+
 ops = {
     "Hadamard",
     "PauliX",
@@ -1628,6 +1693,7 @@ ops = {
     "CRX",
     "CRY",
     "CRZ",
+    "Unitary",
 }
 
 

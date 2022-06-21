@@ -332,7 +332,7 @@ class JaxBackend(CompiledCircuit):
         '''
 
         ts = jnp.asarray(matrix, dtype=JCOMPLEX)
-        shape = [2 for _ in range(num_qubits)]
+        shape = [2 for _ in range(2*num_qubits)]
         shape = tuple(shape)
         return ts.reshape(shape)
 

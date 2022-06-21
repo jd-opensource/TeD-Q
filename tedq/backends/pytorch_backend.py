@@ -427,7 +427,7 @@ class PyTorchBackend(CompiledCircuit):
         ts = torch.from_numpy(matrix)
         ts = ts.type(tcomplex)
         ts = ts.to(cls._device)
-        shape = [2 for _ in range(num_qubits)]
+        shape = [2 for _ in range(2*num_qubits)]
         shape = tuple(shape)
         return ts.reshape(shape)
 
