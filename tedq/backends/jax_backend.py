@@ -326,6 +326,16 @@ class JaxBackend(CompiledCircuit):
         ts = ts.reshape(shape)
         return ts
 
+    def _matrix_to_tensor(self, matrix, num_qubits):
+        '''
+        converting a numpy matrix to corresponding backend tensor
+        '''
+
+        ts = jnp.asarray(matrix, dtype=JCOMPLEX)
+        shape = [2 for _ in range(num_qubits)]
+        shape = tuple(shape)
+        return ts.reshape(shape)
+
     @classmethod
     def get_I_tensor(cls, paramslist):
         '''

@@ -419,6 +419,18 @@ class PyTorchBackend(CompiledCircuit):
         cls._device = device
     
 
+    def _matrix_to_tensor(self, matrix, num_qubits):
+        '''
+        converting a numpy matrix to corresponding backend tensor
+        '''
+
+        ts = torch.from_numpy(matrix)
+        ts = ts.type(tcomplex)
+        ts = ts.to(cls._device)
+        shape = [2 for _ in range(num_qubits)]
+        shape = tuple(shape)
+        return ts.reshape(shape)
+
     @classmethod
     def get_I_tensor(cls, paramslist):
         '''

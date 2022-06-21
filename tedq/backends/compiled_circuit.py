@@ -68,6 +68,7 @@ class CompiledCircuit:
         self._operatorparams = OrderedDict()
         self._trainableparams = OrderedDict()
         self._operators = OrderedDict()
+        self._matrixs = OrderedDict()
         self._operands = []
         self._adjointoperands = []
 
@@ -78,6 +79,7 @@ class CompiledCircuit:
             self._appliedqubits[operator.instance_id] = operator.qubits
             self._operatorparams[operator.instance_id] = operator.parameters
             self._trainableparams[operator.instance_id] = operator.trainable_params
+            self._matrixs[operator.instance_id] = operator.matrix
         self._measurements = circuit.measurements
 
         self._gate_tensors = {
@@ -378,10 +380,22 @@ class CompiledCircuit:
         Get tensor, name and parameters of each gate from the `Circuit` for ``Wave function vector method``.
         '''
         self._operands = []
-        for idx, name in self._operatorname.items():
-            # print(self._operatorparams[idx])
-            self._operands.append(self._tensor_of_gate(
-                name, self._operatorparams[idx]))
+        for idx, trnblepars in self._trainableparams.items():
+
+            len_tp = len(trnblepars)
+
+            if len_tp > 0:
+                name = self._operatorname[idx]
+                parameters = self._operatorparams[idx]
+                ts = self._tensor_of_gate(name, parameters)
+
+            else:
+                matrix = self._matrixs[idx]
+                num_qubits = len(self._appliedqubits[idx])
+                ts = self._matrix_to_tensor(matrix, num_qubits)
+
+            self._operands.append(ts)
+
 
         self._operands.reverse()
 
@@ -392,12 +406,24 @@ class CompiledCircuit:
         #print("_parse_circuit_cotengra:  ", self._device)
         self._operands = []
         self._adjointoperands = []
-        for idx, name in self._operatorname.items():
-            # print(self._operatorparams[idx])
-            self._operands.append(self._tensor_of_gate(
-                name, self._operatorparams[idx]))
-            self._adjointoperands.append(self.complex_conjugate(self._tensor_of_gate(
-                name, self._operatorparams[idx])))
+
+        for idx, trnblepars in self._trainableparams.items():
+
+            len_tp = len(trnblepars)
+
+            if len_tp > 0:
+                name = self._operatorname[idx]
+                parameters = self._operatorparams[idx]
+                ts = self._tensor_of_gate(name, parameters)
+
+            else:
+                matrix = self._matrixs[idx]
+                num_qubits = len(self._appliedqubits[idx])
+                ts = self._matrix_to_tensor(matrix, num_qubits)
+
+            self._operands.append(ts)
+            self._adjointoperands.append(self.complex_conjugate(ts))
+
         self._adjointoperands.reverse()
 
     def _tensor_of_gate(self, gatename, *params):
@@ -414,6 +440,14 @@ class CompiledCircuit:
         #print("_tensor_of_gate:  ", self._device)
         ts = self._gate_tensors[gatename](*params)
         return ts
+
+    def _matrix_to_tensor(self, matrix, num_qubits):
+        '''
+        converting a numpy matrix to corresponding backend tensor
+        '''
+
+        raise NotImplementedError
+
 
     def _update_parameters(self, *params):
         '''
@@ -468,7 +502,7 @@ class CompiledCircuit:
                     self._operatorparams[idx][pos] = params[count + i]
                 count = count + len_tp
         if len(params) != count:
-            raise ValueError(f'Error!!!! number of parameters too much, only required {count} but {len(params)} are given')
+            raise ValueError(f'Error!!!! number of parameters are not matched!! required {count} but {len(params)} are given')
 
     @property
     def operators(self):
