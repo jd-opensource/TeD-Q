@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'tedq'))
 setup(name='tedq',
       version=0.1,
       description='TeD-Q (Tensor-network enhanced Distributed Quantum) is a tensor network enhanced distributed hybrid quantum machine learning framework.',
-      url='https://gitee.com/xywu1990/tedq',
+      url='https://github.com/JDEA-Quantum-Lab/TeD-Q',
       author='Yaocheng Chen, Chung-yun Kuo, Xingyao Wu',
       author_email='wu.x.yao@gmail.com',
       packages=[package for package in find_packages()
