@@ -36,6 +36,7 @@ class Circuit:
             self._circuit = None
             self._operators = func['operators']
             self._measurements = func['measurements']
+            self._init_state = func['init_state']
             self._num_qubits = num_qubits
 
         else:
@@ -54,6 +55,13 @@ class Circuit:
 
             self._circuit = circuit
 
+            # TODO: add checking, make sure state preparation at begin, measurement at end
+            if self._circuit.storage_context[0]._is_preparation:
+                self._init_state = self._circuit.storage_context[0]
+            else:
+                self._init_state = None
+
+
             self._operators = [
                 ops for ops in self._circuit.storage_context if isinstance(ops, GateBase)
             ]
@@ -63,7 +71,7 @@ class Circuit:
             ]
 
             if not (
-                len(self._operators) + len(self._measurements)
+                len(self._operators) + len(self._measurements) + bool(self._init_state)
                 == len(circuit.storage_context)
             ):
                 raise QuantumStorageError("Error in Circuit class, unknown content in the storage_context!")
@@ -122,6 +130,13 @@ class Circuit:
         return measurement objects of this circuit.
         """
         return self._measurements
+
+    @property
+    def init_state(self):
+        r"""
+        return init_state objects of this circuit.
+        """
+        return self._init_state
 
     def compilecircuit(self, backend=None, **kwargs):
         r"""

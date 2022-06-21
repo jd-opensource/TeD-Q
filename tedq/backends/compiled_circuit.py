@@ -50,10 +50,12 @@ class CompiledCircuit:
         self._use_cotengra = use_cotengra
         self._use_jdopttn = use_jdopttn
 
-        outer_path_finder = 0
         if use_cotengra and use_jdopttn:
-            outer_path_finder = 1
             raise ValueError("Error!!!! can not use contengra, opt_einsum and cyc at the same time!")
+
+        outer_path_finder = 0
+        if use_cotengra or use_jdopttn:
+            outer_path_finder = 1
 
         self._tn_mode = tn_mode
         if outer_path_finder and tn_mode:
@@ -80,7 +82,10 @@ class CompiledCircuit:
             self._operatorparams[operator.instance_id] = operator.parameters
             self._trainableparams[operator.instance_id] = operator.trainable_params
             self._matrixs[operator.instance_id] = operator.matrix
+
         self._measurements = circuit.measurements
+
+        self._init_state = circuit.init_state
 
         self._gate_tensors = {
             "I": self.get_I_tensor,
@@ -162,8 +167,18 @@ class CompiledCircuit:
                 flops += vector_lenght*(2*8-1)
 
 
+            elif len_qbts == 4:
+                gate_pos = [4, 5, 6, 7]
+                res_right = list(range(self._num_qubits))
+                res_right = [x for x in res_right if x not in qbts]
+                dot_result = qbts + res_right
+                for i in range(self._num_qubits):
+                    perms.append(dot_result.index(i))
+
+                flops += vector_lenght*(2*16-1)
+
             else:
-                raise QuantumValueError("Error on __init__ of Compiled_Circuit, unknown gate with num_qubits larger than 3")
+                raise QuantumValueError("Error on __init__ of Compiled_Circuit, unknown gate with num_qubits larger than 4")
             
             state_pos = qbts
             self._axeslist.append((gate_pos, state_pos))
@@ -177,6 +192,10 @@ class CompiledCircuit:
 
         #print(self._tn_mode)
         if self._use_cotengra or self._use_jdopttn or self._tn_mode:
+
+            if self._init_state:
+                raise ValueError("Error!!!! tensor network contraction mode do not support user-defined initial quantum state!")
+
             #print(self._tn_mode)
             '''
             self._cotengra_operands = []  # each measurement will have its own operand
@@ -450,6 +469,7 @@ class CompiledCircuit:
 
 
     def _update_parameters(self, *params):
+        #print(len(params))
         '''
         Update the parameters of trainable gate according to new input parameters. The new input parameters are passed to this function when the `compiledCircuit` is called.
 
@@ -501,6 +521,7 @@ class CompiledCircuit:
 
                     self._operatorparams[idx][pos] = params[count + i]
                 count = count + len_tp
+                #print("count:  ", count)
         if len(params) != count:
             raise ValueError(f'Error!!!! number of parameters are not matched!! required {count} but {len(params)} are given')
 

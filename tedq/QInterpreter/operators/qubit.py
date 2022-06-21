@@ -1604,7 +1604,7 @@ class CRZ(GateBase):
         """
         return CRZ(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
 
-
+# TODO: add checking is it really a unitary matrix, see pennylane code
 class Unitary(GateBase):
     r"""Unitary(qubits)
     Unitary gate operator.

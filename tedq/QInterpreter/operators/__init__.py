@@ -6,3 +6,4 @@ Modules about quantum operator, including all the gates, observables and measure
 
 from .qubit import *
 from .measurement import expval, probs, sample, state, var
+from .prepared_state import *

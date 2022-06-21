@@ -228,7 +228,7 @@ class JaxBackend(CompiledCircuit):
             return results
 
         else:
-            results = self.svpm_mode_jit()
+            results = self.svpm_mode()  # self.svpm_mode_jit() cannot use, otherwise cannot calculate gradient, need to upgrade
             return results
 
 
@@ -291,8 +291,18 @@ class JaxBackend(CompiledCircuit):
 
         return results
 
-    # in state |00...0>
     def get_initstate(self):
+        if self._init_state:
+            matrix = deepcopy(self._init_state.matrix)
+            _b = jnp.asarray(matrix, dtype=JCOMPLEX)
+            shape = [2 for _ in range(self._num_qubits)]
+            shape = tuple(shape)
+            return _b.reshape(shape)
+        else:
+            return self.default_initstate()
+
+    # in state |00...0>
+    def default_initstate(self):
         '''
         Get initial state
         '''

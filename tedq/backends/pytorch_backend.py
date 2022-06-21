@@ -377,8 +377,20 @@ class PyTorchBackend(CompiledCircuit):
 
         return results
 
-    # in state |00...0>
     def get_initstate(self):
+        if self._init_state:
+            matrix = deepcopy(self._init_state.matrix)
+            _b = torch.from_numpy(matrix)
+            _b = _b.type(tcomplex)
+            _b = _b.to(self._device)
+            shape = [2 for _ in range(self._num_qubits)]
+            shape = tuple(shape)
+            return _b.reshape(shape)
+        else:
+            return self.default_initstate()
+
+    # in state |00...0>
+    def default_initstate(self):
         r'''
         
         Initial all :math:`|0\rangle` state
@@ -426,7 +438,7 @@ class PyTorchBackend(CompiledCircuit):
 
         ts = torch.from_numpy(matrix)
         ts = ts.type(tcomplex)
-        ts = ts.to(cls._device)
+        ts = ts.to(self._device)
         shape = [2 for _ in range(2*num_qubits)]
         shape = tuple(shape)
         return ts.reshape(shape)
