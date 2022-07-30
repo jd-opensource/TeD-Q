@@ -739,8 +739,8 @@ class PyTorchBackend(CompiledCircuit):
         theta = paramslist[0]
         _c = torch.cos(theta / 2.0)
         _js = 1j * torch.sin(-theta / 2.0)
-        return_tensor = torch.zeros([4], dtype=tcomplex,
-            device = cls._device)
+        #return_tensor = torch.zeros([4], dtype=tcomplex,
+        #    device = cls._device)
         #print("torch RX before data:  ", return_tensor.device)
         data = [
             _c, 
@@ -748,10 +748,11 @@ class PyTorchBackend(CompiledCircuit):
             _js, 
             _c
         ]  # [[c, js], [js, c]]
-        #data = torch.cat(data, dim=0)
-        #return_tensor = torch.as_tensor(data, dtype=tcomplex)
-        for idx, element in enumerate(data):
-            return_tensor[idx] = element
+        data = torch.cat(data, dim=0)
+        return_tensor = torch.as_tensor(data, dtype=tcomplex,
+            device = cls._device)
+        #for idx, element in enumerate(data):
+        #    return_tensor[idx] = element
         #print("torch RX device:  ", return_tensor.device)
         #print("RX self._device:  ", self._device)
         return return_tensor.reshape([2, 2])
@@ -766,18 +767,19 @@ class PyTorchBackend(CompiledCircuit):
         theta = paramslist[0]
         _c = torch.cos(theta / 2.0)
         _s = torch.sin(theta / 2.0)
-        return_tensor = torch.zeros([4], dtype=tcomplex,
-            device = cls._device)
+        #return_tensor = torch.zeros([4], dtype=tcomplex,
+        #    device = cls._device)
         data = [
             _c, 
             -_s, 
             _s, 
             _c
         ]  # [[c, -s], [s, c]]
-        #data = torch.cat(data, dim=0)
-        #return_tensor = torch.as_tensor(data, dtype=tcomplex)
-        for idx, element in enumerate(data):
-            return_tensor[idx] = element
+        data = torch.cat(data, dim=0)
+        return_tensor = torch.as_tensor(data, dtype=tcomplex,
+            device = cls._device)
+        #for idx, element in enumerate(data):
+        #    return_tensor[idx] = element
         return return_tensor.reshape([2, 2])
 
     @classmethod
@@ -797,14 +799,14 @@ class PyTorchBackend(CompiledCircuit):
             0.0, 
             _p.conj()
         ]  # [[p, 0], [0, p.conjugate()]]
-        return_tensor = torch.tensor(data, dtype=tcomplex,
+        return_tensor = torch.as_tensor(data, dtype=tcomplex,
             device = cls._device)
-        return_tensor[0] = data[0]
-        return_tensor[3] = data[3]
+        #return_tensor[0] = data[0]
+        #return_tensor[3] = data[3]
         #data = torch.cat(data, dim=0)
         #return_tensor = torch.as_tensor(data, dtype=tcomplex)
-        for idx, element in enumerate(data):
-            return_tensor[idx] = element
+        #for idx, element in enumerate(data):
+        #    return_tensor[idx] = element
         return return_tensor.reshape([2, 2])
 
     @classmethod
@@ -819,18 +821,19 @@ class PyTorchBackend(CompiledCircuit):
         omega =paramslist[2]
         _c = torch.cos(phi / 2.)
         _s = torch.sin(phi / 2.)
-        return_tensor = torch.zeros([4], dtype=tcomplex,
-            device = cls._device)
+        #return_tensor = torch.zeros([4], dtype=tcomplex,
+        #    device = cls._device)
         data = [
             torch.exp(-0.5j * (theta + omega)) * _c, 
             -torch.exp(0.5j * (theta - omega)) * _s, 
             torch.exp(-0.5j * (theta - omega)) * _s, 
             torch.exp(0.5j * (theta + omega)) * _c
         ]
-        #data = torch.cat(data, dim=0)
-        #return_tensor = torch.as_tensor(data, dtype=tcomplex)
-        for idx, element in enumerate(data):
-            return_tensor[idx] = element
+        data = torch.cat(data, dim=0)
+        return_tensor = torch.as_tensor(data, dtype=tcomplex,
+            device = cls._device)
+        #for idx, element in enumerate(data):
+        #    return_tensor[idx] = element
         return return_tensor.reshape([2,2])
 
     @classmethod
@@ -849,9 +852,9 @@ class PyTorchBackend(CompiledCircuit):
             0.0,
             torch.exp(1.0j * phi),
         ]  # [[1, 0], [0, torch.exp(1j * phi)]]
-        return_tensor = torch.tensor(data, dtype=tcomplex,
+        return_tensor = torch.as_tensor(data, dtype=tcomplex,
             device = cls._device)
-        return_tensor[3] = data[3]
+        #return_tensor[3] = data[3]
         #data = torch.cat(data, dim=0)
         #return_tensor = torch.as_tensor(data, dtype=tcomplex)
         #for idx, element in enumerate(data):
@@ -886,9 +889,9 @@ class PyTorchBackend(CompiledCircuit):
             0.0,
             torch.exp(1.0j * phi),
         ]  # [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, torch.exp(1j * phi)]]
-        return_tensor = torch.tensor(data, dtype=tcomplex,
+        return_tensor = torch.as_tensor(data, dtype=tcomplex,
             device = cls._device)
-        return_tensor[15] = data[15]
+        #return_tensor[15] = data[15]
         #data = torch.cat(data, dim=0)
         #return_tensor = torch.as_tensor(data, dtype=tcomplex)
         #for idx, element in enumerate(data):
@@ -925,12 +928,12 @@ class PyTorchBackend(CompiledCircuit):
             _js,
             _c,
         ]  # [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, c, js], [0, 0, js, c]]
-        return_tensor = torch.tensor(data, dtype=tcomplex,
+        return_tensor = torch.as_tensor(data, dtype=tcomplex,
             device = cls._device)
-        return_tensor[10] = data[10]
-        return_tensor[11] = data[11]
-        return_tensor[14] = data[14]
-        return_tensor[15] = data[15]
+        #return_tensor[10] = data[10]
+        #return_tensor[11] = data[11]
+        #return_tensor[14] = data[14]
+        #return_tensor[15] = data[15]
         #data = torch.cat(data, dim=0)
         #return_tensor = torch.as_tensor(data, dtype=tcomplex)
         #for idx, element in enumerate(data):
@@ -967,12 +970,12 @@ class PyTorchBackend(CompiledCircuit):
             _s,
             _c,
         ]  # [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, c, -s], [0, 0, s, c]]
-        return_tensor = torch.tensor(data, dtype=tcomplex,
+        return_tensor = torch.as_tensor(data, dtype=tcomplex,
             device = cls._device)
-        return_tensor[10] = data[10]
-        return_tensor[11] = data[11]
-        return_tensor[14] = data[14]
-        return_tensor[15] = data[15]
+        #return_tensor[10] = data[10]
+        #return_tensor[11] = data[11]
+        #return_tensor[14] = data[14]
+        #return_tensor[15] = data[15]
         #data = torch.cat(data, dim=0)
         #return_tensor = torch.as_tensor(data, dtype=tcomplex)
         #for idx, element in enumerate(data):
@@ -1006,10 +1009,10 @@ class PyTorchBackend(CompiledCircuit):
             0.0,
             torch.exp(0.5j * theta),
         ]
-        return_tensor = torch.tensor(data, dtype=tcomplex,
+        return_tensor = torch.as_tensor(data, dtype=tcomplex,
             device = cls._device)
-        return_tensor[10] = data[10]
-        return_tensor[15] = data[15]
+        #return_tensor[10] = data[10]
+        #return_tensor[15] = data[15]
 
         #data = torch.cat(data, dim=0)
         #return_tensor = torch.as_tensor(data, dtype=tcomplex)

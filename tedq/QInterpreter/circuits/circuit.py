@@ -58,6 +58,7 @@ class Circuit:
             # TODO: add checking, make sure state preparation at begin, measurement at end
             if self._circuit.storage_context[0]._is_preparation:
                 self._init_state = self._circuit.storage_context[0]
+                #print(self._init_state._is_preparation)
             else:
                 self._init_state = None
 
@@ -74,6 +75,7 @@ class Circuit:
                 len(self._operators) + len(self._measurements) + bool(self._init_state)
                 == len(circuit.storage_context)
             ):
+                #print(len(self._operators), len(self._measurements), self._init_state)
                 raise QuantumStorageError("Error in Circuit class, unknown content in the storage_context!")
 
         if len(self._measurements) == 0:

@@ -79,6 +79,7 @@ class OperatorBase(abc.ABC):
             "trainable_params", list(range(self.num_params))
         )  # what params are trainable, default is all
         self._is_preparation = kwargs.pop("is_preparation", False)
+        #print(self._name, self._is_preparation)
         self._expected_index = kwargs.pop("expected_index", 0) 
         self._matrix = self.get_matrix() # the matrix presentation of this gate data
 
