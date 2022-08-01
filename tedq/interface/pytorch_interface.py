@@ -79,7 +79,7 @@ class PytorchInterface(torch.autograd.Function):
         ctx.len_res = len(results)
         # print(results)
         # print(type(results))
-        results = torch.from_numpy(np.asarray(results).copy()).squeeze()  # pylint: disable=no-member
+        results = torch.from_numpy(np.asarray(results).copy())#.squeeze()  # pylint: disable=no-member
         #jax backend pytorch interface only support list of measurements with the same dimensions.
         #the output must be a torch.tensor object
         return results
