@@ -24,13 +24,13 @@ if __name__ == '__main__':
     parser.add_argument(
         "--master_addr",
         type=str,
-        default="localhost",
+        default="172.17.224.178",
         help="""Address of master, will default to localhost if not provided.
         Master must be able to accept network traffic on the address + port.""")
     parser.add_argument(
         "--master_port",
         type=str,
-        default="5678",
+        default="8119",
         help="""Port that master is listening on, will default to 29500 if not
         provided. Master must be able to accept network traffic on the host and port.""")
 
