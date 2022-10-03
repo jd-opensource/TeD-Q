@@ -23,214 +23,11 @@ This module contains the :class:`TensorNetwork` and :class:`Tensor`.
 import collections
 from copy import deepcopy
 import numpy as np
+import torch
 
 from tedq.QInterpreter.operators.measurement import Expectation, Probability, State
-
-class Tensor():
-    r'''
-    Stroe tensor information, including data, indices and size.
-    '''
-
-    def __init__(self, data, indices, size):
-        self._data = data
-        self._indices = indices
-        self._size = size
-        size_from_data = list(self._data.shape)
-        if size_from_data != self._size:
-            raise ValueError("Error!!, input size do not match data shape!!")
-
-    def squeeze(self):
-        """Drop any singlet dimensions from this tensor.
-        Parameters
-        ----------
-        -------
-        Tensor
-
-        **Example**
-
-        .. code-block:: python3
-
-            import numpy as np
-            data = np.array([[[1., 0.,], [0., 1.]]])
-            indices = ['a', 'b', 'c']
-            size = [1, 2, 2]            
-
-            ts = Tensor(data, indices, size)
-
-        >>> ts.data
-        array([[[1., 0.],
-                [0., 1.]]])
-
-        >>> ts.indices
-        ['a', 'b', 'c']
-
-        >>> ts.size
-        [1, 2, 2]
-
-        >>> ts.squeeze()
-
-        >>> ts.data
-        array([[1., 0.],
-                [0., 1.]])
-
-        >>> ts.indices
-        ['b', 'c']
-
-        >>> ts.size
-        [2, 2]
-
-        """
-        #pass
-        
-        need_squeeze = False
-
-        if self._size:
-            pop_pos = [i for i, d in enumerate(self._size) if d == 1]
-            #print(pop_pos)
-            #print(self._size)
-
-            if not pop_pos:  # pylint: disable=no-else-return
-                return need_squeeze
-
-            else:
-                for pos in pop_pos:
-                    self._size.pop(pos)
-                    self._indices.pop(pos)
-                    self._data = self._data.squeeze()
-
-                size_from_data = list(self._data.shape)
-                if size_from_data != self._size:
-                    raise ValueError("Error!!, tensor size do not match data shape!!")
-                need_squeeze = True
-                return need_squeeze
-
-        return need_squeeze
-
-
-
-    def fuse(self, fused_inds):
-        r'''
-        Fuse multiple indices into one.
-
-        **Example**
-
-        .. code-block:: python3
-
-            import numpy as np
-            data = np.array([[1., 0.,], [0., 1.]])
-            indices = ['a', 'b']
-            size = [2, 2]            
-
-            ts = Tensor(data, indices, size)
-
-        >>> ts.data
-        array([[1., 0.],
-                [0., 1.]])
-
-        >>> ts.indices
-        ['a', 'b']
-
-        >>> ts.size
-        [2, 2]
-
-        >>> ts.fuse(['a', 'b'])
-
-        >>> ts.data
-        array([1., 0., 0., 1.])
-
-        >>> ts.indices
-        ['a']
-
-        >>> ts.size
-        [4]
-
-        '''
-
-        num_fused = len(fused_inds)
-        fused_set = set(fused_inds)
-        #remain_inds = fused_inds[0]
-        #fused = fused_inds[1:]
-        indices = self.indices
-
-        old_set = set(indices)
-        wrong = fused_set - old_set
-        if wrong:
-            raise ValueError("Error! fused_inds has indices that not appear in tersor's original indices")
-
-        new_indices = list(fused_inds)
-        #print(new_indices)
-        #print(fused_inds)
-
-        for index in indices:
-            if not index in fused_set:
-                new_indices.append(index)
-
-        len_old = len(indices)
-        len_new = len(new_indices)
-        if len_old != len_new:
-            #print(indices)
-            #print(fused_set)
-            #print(new_indices)
-            raise ValueError("lenth of new indices is not equal to old one!!")
-
-        permute = [indices.index(index) for index in new_indices]
-        size = self.size
-
-        #print(num_fused)
-        #print(permute)
-        #print(size)
-        #print(tuple(size[permute[i]] for i in range(num_fused)))
-        size_prod = np.prod(tuple(size[permute[i]] for i in range(num_fused)))
-        #print(size_prod)
-
-        l_new_size = [size_prod]
-        #print(l_new_size)
-
-        num_size = len(size)
-        r_new_size = [size[permute[i]] for i in range(num_fused, num_size)]
-
-        new_size = l_new_size + r_new_size# can not use extend, otherwise new_size is None, l_new_size will be extended!!!
-
-        #print(new_indices)
-        #print(indices)
-        #print(permute)
-        #print(size)
-        #print(l_new_size)
-        #print(r_new_size)
-        #print(new_size)
-        #print(" ")
-        self._data = np.transpose(self._data, axes = permute)
-        self._data = self._data.reshape(new_size)
-        self._size = new_size
-        self._indices = [new_indices[0]] + new_indices[num_fused:]
-        #print(self._indices)
-
-        return (permute, new_size)
-
-
-
-
-
-    @property
-    def data(self):
-        r'''
-        return data of the tensor
-        '''
-        return self._data
-
-    @property
-    def indices(self):
-        r'''
-        return indices of the tensor
-        '''
-        return self._indices
-
-    @property
-    def size(self):
-        r'''
-        return size of the tensor
-        '''
-        return self._size
+from .tensor_core import Tensor
+from .array_ops import get_diag_axes, get_antidiag_axes
 
 class TensorNetwork():
     r'''
@@ -292,6 +89,9 @@ class TensorNetwork():
         print("Wrong! not ready!!! change tn_simplify to False")
         self.squeeze()
         self.fuse_multi_edges()
+        #print("wtf")
+        self.diagonal_reduce(self._output_indices)
+        self.antidiagonal_reduce(self._output_indices)
         
 
         #print(self.operands)
@@ -317,11 +117,25 @@ class TensorNetwork():
 
                 if do_action == 'permute':
                     i = order_operand
-                    arrays[i] = arrays[i].permute(action_params)
+                    dims = action_params
+                    arrays[i] = arrays[i].permute(dims)
 
                 elif do_action == 'reshape':
                     i = order_operand
-                    arrays[i] = arrays[i].reshape(action_params)
+                    shape = action_params
+                    arrays[i] = arrays[i].reshape(shape)
+
+                elif do_action == 'einsum':
+                    i = order_operand
+                    einsum_str = action_params
+                    arrays[i] = torch.einsum(einsum_str, arrays[i])
+
+                elif do_action == 'flip':
+                    i = order_operand
+                    flipper = action_params
+                    array = arrays[i]
+                    array = torch.flip(array, flipper)
+                    arrays[i] = array
 
                 else:
                     raise ValueError("unknown action!!")
@@ -363,7 +177,7 @@ class TensorNetwork():
                 operand = ('squeeze', i)
                 self._operands.append(operand)
         # update the tn
-        self.mapping_tensors()
+        # self.mapping_tensors() this will not be changed
         self.mapping_indices()
         #return self
 
@@ -393,8 +207,187 @@ class TensorNetwork():
                     operand = ('reshape', i, new_size)
                     self._operands.append(operand)
         # update the tn                    
-        self.mapping_tensors()
+        # self.mapping_tensors() this will not be changed
         self.mapping_indices()
+
+    def diagonal_reduce(
+        self,
+        output_inds,
+        atol=1e-12,
+    ):
+        """
+        Find out diagonal tensors and collapse those axes. This will create 'hyper' edges.
+        A--D--B will become    D
+                               |
+                             A----B  
+
+        Parameters
+        ----------
+        output_inds : list(str), Outer indices of the tensor network and thus not change. 
+        atol : float, optional, The absolute tolerance compared to zero when identifying diagonal tensors.
+            which to compare to zero with.
+        See Also
+        --------
+        squeeze fuse_multi_edges
+        """
+
+        cache = set()
+
+        queue = list(self._map_tensor)
+        #print(len(queue))
+        while queue:
+            t_ids = queue.pop()
+            #print(t_ids)
+            t = self._map_tensor[t_ids]
+
+            cache_key = ('dr', t_ids, id(t.data))
+            if cache_key in cache:
+                continue
+
+            ab = get_diag_axes(t.data, atol=atol)
+
+            # if no diagonal axes
+            if ab is None:
+                cache.add(cache_key)
+                continue
+
+            a, b = ab
+            inds_a, inds_b = t.indices[a], t.indices[b]
+            if inds_a not in output_inds:
+                # transfer inds_a to inds_b
+                old_inds = inds_a
+                new_inds = inds_b
+
+            else:
+                if inds_b in output_inds:
+                    # both indices are outer indices, skip them
+                    continue
+                # make sure output indice inds_a will be kept;
+                old_inds = inds_b
+                new_inds = inds_a
+            #print(t.data)
+                
+
+            # transfer indices according to mapping
+            # after that, some tensors will have repeated indice
+            self.replace_indice(old_inds, new_inds)
+
+            # collapse the repeated indice of this tensor
+            # other indice replaced tensors will collapse in their run.
+            einsum_str = t.collapse_repeated_indice()
+            #print(einsum_str)
+            
+            if einsum_str is not None:
+                i = self._tensors.index(t)
+                #print("i", i)
+                operand = ('einsum', i, einsum_str)
+                self._operands.append(operand)
+
+            # update the indices mapping
+            self.mapping_indices()
+
+            # this tensor might still has other diagonal axes
+            queue.append(t_ids)
+
+    
+    def antidiagonal_reduce(
+        self,
+        output_inds,
+        atol=1e-12,
+    ):
+        """
+        Find out antidiagonal tensors and collapse those axes. This will create 'hyper' edges.
+        A--D--B will become    D
+                               |
+                             A----B  
+
+        Parameters
+        ----------
+        output_inds : list(str), Outer indices of the tensor network and thus not change. 
+        atol : float, optional, The absolute tolerance compared to zero when identifying antidiagonal tensors.
+            which to compare to zero with.
+        See Also
+        --------
+        squeeze fuse_multi_edges
+        """
+
+        cache = set()
+
+        queue = list(self._map_tensor)
+        while queue:
+            t_ids = queue.pop()
+            t = self._map_tensor[t_ids]
+
+            cache_key = ('dr', t_ids, id(t.data))
+            if cache_key in cache:
+                continue
+
+            ab = get_antidiag_axes(t.data, atol=atol)
+
+            # if no diagonal axes
+            if ab is None:
+                cache.add(cache_key)
+                continue
+
+            a, b = ab
+            inds_a, inds_b = t.indices[a], t.indices[b]
+            if inds_a not in output_inds:
+                # transfer flip inds_a
+                flip_inds = inds_a
+
+            else:
+                if inds_b in output_inds:
+                    # both indices are outer indices, skip them
+                    continue
+                # make sure output indice inds_a will be kept;
+                flip_inds = inds_b
+                
+
+            #print("flip ", flip_inds)
+            # self.operands inside flip function
+            self.flip(flip_inds)
+
+
+            # do diagonal reduce after flipping
+            self.diagonal_reduce(output_inds=output_inds)
+
+            # this tensor might still has other diagonal axes
+            queue.append(t_ids)
+
+    def flip(self, flip_inds):
+        """Flip the dimension corresponding to index ``flip_inds`` on all tensors
+        that share it.
+        """
+        t_ids_set = self._map_index[flip_inds]
+
+        for tid in t_ids_set:
+            t = self._map_tensor[tid]
+            flipper = t.flip(flip_inds)
+
+            i = self._tensors.index(t)
+            assert tid == i
+            operand = ('flip', i, flipper)
+            self._operands.append(operand)
+
+    def replace_indice(self, old_inds, new_inds):
+        """Rename indices of all tensors in the tensor network
+        Parameters
+        ----------
+        old_inds : old index that need to be transferred
+        new_inds : new index that to be transferred to
+        }
+        """
+
+        t_ids_set = self._map_index[old_inds]
+        #print(t_ids_set)
+
+        for tid in t_ids_set:
+            t = self._map_tensor[tid]
+            #print(t.indices)
+            t.reindex(old_inds, new_inds)
+            #print(t.indices)
+
+
 
 
     def update_tn(self):
