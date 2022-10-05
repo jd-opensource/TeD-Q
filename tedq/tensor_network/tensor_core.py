@@ -84,8 +84,8 @@ class Tensor():
         
         need_squeeze = False
 
-        if self._size:
-            pop_pos = [i for i, d in enumerate(self._size) if d == 1]
+        if self.size:
+            pop_pos = [i for i, d in enumerate(self.size) if d == 1]
             #print(pop_pos)
             #print(self._size)
 
@@ -94,8 +94,10 @@ class Tensor():
 
             else:
                 for pos in pop_pos:
-                    self._size.pop(pos)
-                    self._indices.pop(pos)
+                    # can not use pop() here! since pop will change the content.
+                    self._size = [self.size[i] for i, _ in enumerate(self.size) if i != pos]
+                    #print("cyc:  ", self.indices[pos])
+                    self._indices = [self.indices[i] for i, _ in enumerate(self.indices) if i != pos]
                     self._data = self._data.squeeze()
 
                 size_from_data = list(self._data.shape)
@@ -234,6 +236,10 @@ class Tensor():
                 new_inds.append(index)
 
         if len(old_inds) > len(new_inds):
+
+            if len(old_inds) > 52:
+                raise ValueError(f'Error! This tensor too large for performing einsum')
+
             down_dict = {}
             for i, scr in enumerate(old_inds):
                 down_dict[scr] = i
@@ -263,6 +269,14 @@ class Tensor():
 
         self._data = np.flip(self._data, flipper)
         return flipper
+
+    def sum_over(self, index):
+        dim = self.indices.index(index)
+        new_indices = self.indices[:dim] + self.indices[dim + 1:]
+        self._indices = new_indices
+        self._data = np.sum(self._data, dim)
+
+        return dim
 
 
 

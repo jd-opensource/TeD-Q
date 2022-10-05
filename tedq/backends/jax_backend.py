@@ -111,6 +111,7 @@ class JaxBackend(CompiledCircuit):
 
         elif self._interface == "pytorch":
             call_fcn = self.execute_func(self.interface_kwargs, *params)
+            #print(call_fcn)
 
         else:
             raise ValueError(

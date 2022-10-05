@@ -258,7 +258,7 @@ class PyTorchBackend(CompiledCircuit):
                     result = torch.squeeze(result.real)
                     results.append(result)
                 if self.measurements[i].return_type is State:
-                    arrays.extend(zero_state)
+                    #arrays.extend(zero_state)
                     result = self._optimize_order_trees[i].contract(arrays, prefer_einsum = True, backend='torch')
                     results.append(result)
 
@@ -296,7 +296,7 @@ class PyTorchBackend(CompiledCircuit):
                     result = torch.squeeze(result.real)
                     results.append(result)
                 if self.measurements[i].return_type is State:
-                    arrays.extend(zero_state)
+                    #arrays.extend(zero_state)
                     if self._tn_simplify:
                         arrays = self._tensor_networks[i].simplify_arrays(arrays)
                     result = self._optimize_order_trees[i].contract(arrays, backend='torch')
@@ -333,6 +333,7 @@ class PyTorchBackend(CompiledCircuit):
         try:
             results = torch.stack(results, 0)
         except:
+            print(results)
             raise ValueError(f'You can not have multiple measurements with different shapes!!')
 
         return results
