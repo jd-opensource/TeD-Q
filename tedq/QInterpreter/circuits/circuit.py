@@ -20,7 +20,7 @@ This module contains the :class:`Circuit` class for converting user input quantu
 
 # pylint: disable=line-too-long, trailing-whitespace, too-many-lines, too-many-instance-attributes, too-few-public-methods
 
-from tedq.backends import PyTorchBackend, JaxBackend, HardwareBackend
+from tedq.backends import PyTorchBackend, JaxBackend, QUDIOBackend, HardwareBackend
 from tedq.QInterpreter.operators.ops_abc import GateBase
 from tedq.QInterpreter.operators.measurement import QuantumMeasurement
 from tedq.quantum_error import QuantumStorageError, QuantumCircuitError
@@ -148,6 +148,8 @@ class Circuit:
             return JaxBackend(backend, self, **kwargs)
         elif backend == "pytorch":
             return PyTorchBackend(backend, self, **kwargs)
+        elif backend == "pytorch_QUDIO":
+            return QUDIOBackend(backend, self, **kwargs)
         elif backend == "IBMQ_hardware":
             return HardwareBackend(backend, self)
         else:

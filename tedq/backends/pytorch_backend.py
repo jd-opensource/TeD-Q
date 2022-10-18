@@ -109,6 +109,7 @@ class PyTorchBackend(CompiledCircuit):
 
             except AttributeError as error:
                 raise ValueError("input parameters must be type of pytorch tensor!!") from error
+                print(error)
 
         # some quantum circuits do not need any input parameters
         if params:
@@ -121,7 +122,7 @@ class PyTorchBackend(CompiledCircuit):
         '''
         internal call function
         '''
-
+        # print(params)
         # check wether all parameters are in the same device
         self.check_parameters_torch_device(params)
         # update the device for this class
