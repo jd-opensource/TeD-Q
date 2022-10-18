@@ -244,19 +244,31 @@ class PyTorchBackend(CompiledCircuit):
                 zero_state = [torch.tensor([1.,0.], dtype=tcomplex, device = self._device) for _ in range(self._num_qubits)]
                 arrays.extend(zero_state)
                 arrays.extend(self._operands)
+
                 if self.measurements[i].return_type is Expectation:
-                    arrays.append(self._tensor_of_gate(self.measurements[i].obs.name, []))
+
+                    # multiple qubits expectation value measurement.
+                    if isinstance(self.measurements[i].obs, list):
+                        for ob in self.measurements[i].obs:
+                            arrays.append(self._tensor_of_gate(ob.name, []))
+
+                    # single qubit expectation value measurement.
+                    else:
+                        arrays.append(self._tensor_of_gate(self.measurements[i].obs.name, []))
+
                     arrays.extend(self._adjointoperands)
                     arrays.extend(zero_state)
                     result = self._optimize_order_trees[i].contract(arrays, prefer_einsum = True, backend='torch')
                     result = torch.squeeze(result.real)
                     results.append(result)
+
                 if self.measurements[i].return_type is Probability:
                     arrays.extend(self._adjointoperands)
                     arrays.extend(zero_state)
                     result = self._optimize_order_trees[i].contract(arrays, prefer_einsum = True, backend='torch')
                     result = torch.squeeze(result.real)
                     results.append(result)
+
                 if self.measurements[i].return_type is State:
                     #arrays.extend(zero_state)
                     result = self._optimize_order_trees[i].contract(arrays, prefer_einsum = True, backend='torch')
@@ -278,8 +290,18 @@ class PyTorchBackend(CompiledCircuit):
                 zero_state = [torch.tensor([1.,0.], dtype=tcomplex, device=self._device) for _ in range(self._num_qubits)]
                 arrays.extend(zero_state)
                 arrays.extend(self._operands)
+
                 if self.measurements[i].return_type is Expectation:
-                    arrays.append(self._tensor_of_gate(self.measurements[i].obs.name, []))
+
+                    # multiple qubits expectation value measurement.
+                    if isinstance(self.measurements[i].obs, list):
+                        for ob in self.measurements[i].obs:
+                            arrays.append(self._tensor_of_gate(ob.name, []))
+
+                    # single qubit expectation value measurement.
+                    else:
+                        arrays.append(self._tensor_of_gate(self.measurements[i].obs.name, []))
+                        
                     arrays.extend(self._adjointoperands)
                     arrays.extend(zero_state)
                     if self._tn_simplify:
@@ -345,20 +367,44 @@ class PyTorchBackend(CompiledCircuit):
         results = []
         for meas in self.measurements:
             if meas.return_type is Expectation:
-                perms = (
-                    list(range(1, meas.obs.qubits[0] + 1))
-                    + [0]
-                    + list(range(meas.obs.qubits[0] + 1, self._num_qubits))
-                )
-                tmpt = self._tensor_of_gate(meas.obs.name, [])
-                tmpt = torch.tensordot(
-                    tmpt, state, dims=([1], meas.obs.qubits)
-                )  # order need to change!
-                tmpt = tmpt.permute(perms)
-                axes = list(range(self._num_qubits))
-                tmpt = torch.tensordot(torch.conj(state), tmpt, dims=(axes, axes))
-                result = torch.squeeze(tmpt.real)
-                results.append(result)
+
+                # multiple qubits expectation value measurement.
+                if isinstance(meas.obs, list):
+                    meas_state = state
+                    for ob in meas.obs:
+                        perms = (
+                            list(range(1, ob.qubits[0] + 1))
+                            + [0]
+                            + list(range(ob.qubits[0] + 1, self._num_qubits))
+                        )
+                        tmpt = self._tensor_of_gate(ob.name, [])
+                        meas_state = torch.tensordot(
+                            tmpt, meas_state, dims=([1], ob.qubits)
+                        )  # order need to change!
+                        meas_state = meas_state.permute(perms)
+
+                    # obtain the result
+                    axes = list(range(self._num_qubits))
+                    result = torch.tensordot(torch.conj(state), meas_state, dims=(axes, axes))
+                    result = torch.squeeze(result.real)
+                    results.append(result)
+
+                # single qubit expectation value measurement.
+                else:
+                    perms = (
+                        list(range(1, meas.obs.qubits[0] + 1))
+                        + [0]
+                        + list(range(meas.obs.qubits[0] + 1, self._num_qubits))
+                    )
+                    tmpt = self._tensor_of_gate(meas.obs.name, [])
+                    tmpt = torch.tensordot(
+                        tmpt, state, dims=([1], meas.obs.qubits)
+                    )  # order need to change!
+                    tmpt = tmpt.permute(perms)
+                    axes = list(range(self._num_qubits))
+                    tmpt = torch.tensordot(torch.conj(state), tmpt, dims=(axes, axes))
+                    result = torch.squeeze(tmpt.real)
+                    results.append(result)
 
             if meas.return_type is Probability:
                 if meas.qubits is None:

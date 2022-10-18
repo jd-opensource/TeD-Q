@@ -106,9 +106,18 @@ class Circuit:
                 if bigger_qubit > max_qubit:
                     max_qubit = bigger_qubit
             if ops.obs is not None:
-                bigger_qubit = max(ops.obs.qubits)
-                if bigger_qubit > max_qubit:
-                    max_qubit = bigger_qubit
+                # multiple qubits expectation value measurement.
+                if isinstance(ops.obs, list):
+                    for ob in ops.obs:
+                        bigger_qubit = max(ob.qubits)
+                        if bigger_qubit > max_qubit:
+                            max_qubit = bigger_qubit                        
+
+                # single qubit expectation value measurement.
+                else:
+                    bigger_qubit = max(ops.obs.qubits)
+                    if bigger_qubit > max_qubit:
+                        max_qubit = bigger_qubit
 
         return max_qubit
 

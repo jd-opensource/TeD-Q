@@ -826,12 +826,25 @@ def gen_tensor_networks(num_qubits, operators, appliedqubits, measurements):
         else:
 
             if measurement.return_type is Expectation:
-                _current_ids_i = _current_ids_i + 1
-                layer = measurement.obs.qubits[0]
-                _input_indices_i.append(
-                    [get_symbol(_layer_ids_i[layer]), get_symbol(_current_ids_i)])
-                _layer_ids_i[layer] = _current_ids_i
-                _input_arrays_i.append(measurement.obs.matrix)
+
+                # multiple qubits expectation value measurement.
+                if isinstance(measurement.obs, list):
+                    for ob in measurement.obs:
+                        _current_ids_i = _current_ids_i + 1
+                        layer = ob.qubits[0]
+                        _input_indices_i.append(
+                            [get_symbol(_current_ids_i), get_symbol(_layer_ids_i[layer])])
+                        _layer_ids_i[layer] = _current_ids_i
+                        _input_arrays_i.append(ob.matrix)
+
+                # single qubit expectation value measurement.
+                else:
+                    _current_ids_i = _current_ids_i + 1
+                    layer = measurement.obs.qubits[0]
+                    _input_indices_i.append(
+                        [get_symbol(_current_ids_i), get_symbol(_layer_ids_i[layer])])
+                    _layer_ids_i[layer] = _current_ids_i
+                    _input_arrays_i.append(measurement.obs.matrix)
 
             if measurement.return_type is Probability:
                 if measurement.qubits is None:
