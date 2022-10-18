@@ -23,214 +23,15 @@ This module contains the :class:`TensorNetwork` and :class:`Tensor`.
 import collections
 from copy import deepcopy
 import numpy as np
+import torch
+import toolz
+import itertools
 
 from tedq.QInterpreter.operators.measurement import Expectation, Probability, State
+from .tensor_core import Tensor
+from .array_ops import get_diag_axes, get_antidiag_axes
 
-class Tensor():
-    r'''
-    Stroe tensor information, including data, indices and size.
-    '''
-
-    def __init__(self, data, indices, size):
-        self._data = data
-        self._indices = indices
-        self._size = size
-        size_from_data = list(self._data.shape)
-        if size_from_data != self._size:
-            raise ValueError("Error!!, input size do not match data shape!!")
-
-    def squeeze(self):
-        """Drop any singlet dimensions from this tensor.
-        Parameters
-        ----------
-        -------
-        Tensor
-
-        **Example**
-
-        .. code-block:: python3
-
-            import numpy as np
-            data = np.array([[[1., 0.,], [0., 1.]]])
-            indices = ['a', 'b', 'c']
-            size = [1, 2, 2]            
-
-            ts = Tensor(data, indices, size)
-
-        >>> ts.data
-        array([[[1., 0.],
-                [0., 1.]]])
-
-        >>> ts.indices
-        ['a', 'b', 'c']
-
-        >>> ts.size
-        [1, 2, 2]
-
-        >>> ts.squeeze()
-
-        >>> ts.data
-        array([[1., 0.],
-                [0., 1.]])
-
-        >>> ts.indices
-        ['b', 'c']
-
-        >>> ts.size
-        [2, 2]
-
-        """
-        #pass
-        
-        need_squeeze = False
-
-        if self._size:
-            pop_pos = [i for i, d in enumerate(self._size) if d == 1]
-            #print(pop_pos)
-            #print(self._size)
-
-            if not pop_pos:  # pylint: disable=no-else-return
-                return need_squeeze
-
-            else:
-                for pos in pop_pos:
-                    self._size.pop(pos)
-                    self._indices.pop(pos)
-                    self._data = self._data.squeeze()
-
-                size_from_data = list(self._data.shape)
-                if size_from_data != self._size:
-                    raise ValueError("Error!!, tensor size do not match data shape!!")
-                need_squeeze = True
-                return need_squeeze
-
-        return need_squeeze
-
-
-
-    def fuse(self, fused_inds):
-        r'''
-        Fuse multiple indices into one.
-
-        **Example**
-
-        .. code-block:: python3
-
-            import numpy as np
-            data = np.array([[1., 0.,], [0., 1.]])
-            indices = ['a', 'b']
-            size = [2, 2]            
-
-            ts = Tensor(data, indices, size)
-
-        >>> ts.data
-        array([[1., 0.],
-                [0., 1.]])
-
-        >>> ts.indices
-        ['a', 'b']
-
-        >>> ts.size
-        [2, 2]
-
-        >>> ts.fuse(['a', 'b'])
-
-        >>> ts.data
-        array([1., 0., 0., 1.])
-
-        >>> ts.indices
-        ['a']
-
-        >>> ts.size
-        [4]
-
-        '''
-
-        num_fused = len(fused_inds)
-        fused_set = set(fused_inds)
-        #remain_inds = fused_inds[0]
-        #fused = fused_inds[1:]
-        indices = self.indices
-
-        old_set = set(indices)
-        wrong = fused_set - old_set
-        if wrong:
-            raise ValueError("Error! fused_inds has indices that not appear in tersor's original indices")
-
-        new_indices = list(fused_inds)
-        #print(new_indices)
-        #print(fused_inds)
-
-        for index in indices:
-            if not index in fused_set:
-                new_indices.append(index)
-
-        len_old = len(indices)
-        len_new = len(new_indices)
-        if len_old != len_new:
-            #print(indices)
-            #print(fused_set)
-            #print(new_indices)
-            raise ValueError("lenth of new indices is not equal to old one!!")
-
-        permute = [indices.index(index) for index in new_indices]
-        size = self.size
-
-        #print(num_fused)
-        #print(permute)
-        #print(size)
-        #print(tuple(size[permute[i]] for i in range(num_fused)))
-        size_prod = np.prod(tuple(size[permute[i]] for i in range(num_fused)))
-        #print(size_prod)
-
-        l_new_size = [size_prod]
-        #print(l_new_size)
-
-        num_size = len(size)
-        r_new_size = [size[permute[i]] for i in range(num_fused, num_size)]
-
-        new_size = l_new_size + r_new_size# can not use extend, otherwise new_size is None, l_new_size will be extended!!!
-
-        #print(new_indices)
-        #print(indices)
-        #print(permute)
-        #print(size)
-        #print(l_new_size)
-        #print(r_new_size)
-        #print(new_size)
-        #print(" ")
-        self._data = np.transpose(self._data, axes = permute)
-        self._data = self._data.reshape(new_size)
-        self._size = new_size
-        self._indices = [new_indices[0]] + new_indices[num_fused:]
-        #print(self._indices)
-
-        return (permute, new_size)
-
-
-
-
-
-    @property
-    def data(self):
-        r'''
-        return data of the tensor
-        '''
-        return self._data
-
-    @property
-    def indices(self):
-        r'''
-        return indices of the tensor
-        '''
-        return self._indices
-
-    @property
-    def size(self):
-        r'''
-        return size of the tensor
-        '''
-        return self._size
+_EINSUM_SYMBOLS_BASE = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 class TensorNetwork():
     r'''
@@ -284,19 +85,27 @@ class TensorNetwork():
 
         self.mapping_tensors()
         self.mapping_indices()
+        self.update_tn()
 
     def simplify(self):
         r'''
         simplify this tensor network
         '''
         print("Wrong! not ready!!! change tn_simplify to False")
+        print("Number of tensors BEFORE simplification: ", len(self.tensors))
         self.squeeze()
-        self.fuse_multi_edges()
+        self.elliminate_scalar()
+        self.fuse_multi_edges(self._output_indices)
+        #print("wtf")
+        self.diagonal_reduce(self._output_indices)
+        self.antidiagonal_reduce(self._output_indices)
+        self.weighted_rank_simplify(self._output_indices)
         
-
         #print(self.operands)
 
         self.update_tn()
+
+        print("Number of tensors AFTER simplification: ", len(self.tensors))
 
     def simplify_arrays(self, arrays):
         r'''
@@ -306,9 +115,17 @@ class TensorNetwork():
         for operand in self.operands:
             if len(operand) == 2:
                 (do_action, order_operand) = operand
+
                 if do_action == 'squeeze':
                     i = order_operand
                     arrays[i] = arrays[i].squeeze()
+
+                if do_action == 'pop_scalar':
+                    i = order_operand
+                    scalar = arrays.pop(i)
+                    #print(scalar, arrays[0])
+                    arrays[0] = scalar * arrays[0]
+
                 else:
                     raise ValueError("unknown action!!")
 
@@ -317,11 +134,54 @@ class TensorNetwork():
 
                 if do_action == 'permute':
                     i = order_operand
-                    arrays[i] = arrays[i].permute(action_params)
+                    dims = action_params
+                    arrays[i] = arrays[i].permute(dims)
 
                 elif do_action == 'reshape':
                     i = order_operand
-                    arrays[i] = arrays[i].reshape(action_params)
+                    shape = action_params
+                    arrays[i] = arrays[i].reshape(shape)
+
+                elif do_action == 'einsum':
+                    i = order_operand
+                    einsum_str = action_params
+                    arrays[i] = torch.einsum(einsum_str, arrays[i])
+
+                elif do_action == 'flip':
+                    i = order_operand
+                    flipper = action_params
+                    array = arrays[i]
+                    array = torch.flip(array, flipper)
+                    arrays[i] = array
+
+                elif do_action == 'sum_over':
+                    i = order_operand
+                    dim = action_params
+                    array = arrays[i]
+                    array = torch.sum(array, dim)
+                    arrays[i] = array
+
+                else:
+                    raise ValueError("unknown action!!")
+
+            elif len(operand) == 4:
+
+                (do_action, order_operand_i, order_operand_j, action_params) = operand
+
+
+                if do_action == 'einsum':
+                    i, j = order_operand_i, order_operand_j
+                    einsum_str = action_params
+
+                    # ATTENTION!!! position j must be found after ta has been pop!!
+                    # Since pop(i) will delete ta and then affect position of j!!!
+                    # MUST pop i first and then j in order!!
+                    ta = arrays.pop(i)
+                    tb = arrays.pop(j)
+
+                    new_tensor = torch.einsum(einsum_str, ta, tb)
+
+                    arrays.append(new_tensor)
 
                 else:
                     raise ValueError("unknown action!!")
@@ -333,13 +193,12 @@ class TensorNetwork():
         return arrays
 
 
-
     def mapping_tensors(self):
         r'''
         mapping tensor
         '''
         self._map_tensor = {}
-        for t_ids, t in enumerate(self._tensors):  # pylint: disable=invalid-name
+        for t_ids, t in enumerate(self.tensors):  # pylint: disable=invalid-name
             self._map_tensor[t_ids] = t
 
     def mapping_indices(self):
@@ -356,23 +215,52 @@ class TensorNetwork():
         r'''
         squeeze all the tensor inside the tensor network
         '''
-        for i, t in enumerate(self._tensors):  # pylint: disable=invalid-name
+        for i, t in enumerate(self.tensors):  # pylint: disable=invalid-name
             need_squeeze = t.squeeze()
             #print('need_squeeze:   ', need_squeeze)
             if need_squeeze:
                 operand = ('squeeze', i)
                 self._operands.append(operand)
         # update the tn
-        self.mapping_tensors()
+        # self.mapping_tensors() this will not be changed
         self.mapping_indices()
         #return self
 
-    def fuse_multi_edges(self):
+    def elliminate_scalar(self):
+        queue = list(self.tensors)
+        while queue:
+            # stop if there only one tensor remained
+            if len(self.tensors) <=1 :
+                break
+            t = queue.pop()
+            len_inds = len(t.indices)
+            if len_inds == 0:
+                i = self.tensors.index(t)
+                # delete the scalar from tensor list
+                t = self._tensors.pop(i)
+                #print(t, self.tensors[0])
+                self._tensors[0]._data = t._data * self.tensors[0]._data
+                operand = ('pop_scalar', i)
+                self._operands.append(operand)
+
+        self.mapping_tensors() # tensors have been changed, re-map them.
+        self.mapping_indices()
+        self.update_tn()
+
+
+
+
+    def fuse_multi_edges(self, output_inds):
         r'''
         fuse multiple edges into one
         '''
         t_group = collections.defaultdict(list)
         for index, t_ids_set in self._map_index.items():
+
+            # Except output indices
+            if index in output_inds:
+                continue
+
             length = len(t_ids_set)
             if length > 1:
                 ids = frozenset(t_ids_set)
@@ -385,7 +273,7 @@ class TensorNetwork():
                     tensor = self._map_tensor[t_ids]
                     (permute, new_size) = tensor.fuse(indices)
 
-                    i = self._tensors.index(tensor)
+                    i = self.tensors.index(tensor)
 
                     operand = ('permute', i, permute)
                     self._operands.append(operand)
@@ -393,8 +281,382 @@ class TensorNetwork():
                     operand = ('reshape', i, new_size)
                     self._operands.append(operand)
         # update the tn                    
-        self.mapping_tensors()
+        # self.mapping_tensors() this will not be changed
         self.mapping_indices()
+        self.update_tn()
+
+    def diagonal_reduce(
+        self,
+        output_inds,
+        atol=1e-12,
+    ):
+        """
+        Find out diagonal tensors and collapse those axes. This will create 'hyper' edges.
+        A--D--B will become    D
+                               |
+                             A----B  
+
+        Parameters
+        ----------
+        output_inds : list(str), Outer indices of the tensor network and thus not change. 
+        atol : float, optional, The absolute tolerance compared to zero when identifying diagonal tensors.
+            which to compare to zero with.
+        See Also
+        --------
+        squeeze fuse_multi_edges
+        """
+
+        cache = set()
+
+        queue = list(self._map_tensor)
+        #print(len(queue))
+        while queue:
+            t_ids = queue.pop()
+            #print(t_ids)
+            t = self._map_tensor[t_ids]
+
+            cache_key = ('dr', t_ids, id(t.data))
+            if cache_key in cache:
+                continue
+
+            ab = get_diag_axes(t.data, atol=atol)
+
+            # if no diagonal axes
+            if ab is None:
+                cache.add(cache_key)
+                continue
+
+            a, b = ab
+            inds_a, inds_b = t.indices[a], t.indices[b]
+            if inds_a not in output_inds:
+                # transfer inds_a to inds_b
+                old_inds = inds_a
+                new_inds = inds_b
+
+            else:
+                if inds_b in output_inds:
+                    # both indices are outer indices, skip them
+                    continue
+                # make sure output indice inds_a will be kept;
+                old_inds = inds_b
+                new_inds = inds_a
+            #print(t.data)
+                
+
+            # transfer indices according to mapping
+            # after that, some tensors will have repeated indice
+            self.replace_indice(old_inds, new_inds)
+
+            # collapse the repeated indice of this tensor
+            # other indice replaced tensors will collapse in their run.
+            self.collapse_repeated_indice(t)
+
+            # update the indices mapping
+            self.mapping_indices()
+
+            # this tensor might still has other diagonal axes
+            queue.append(t_ids)
+
+        # final check of repeated indices
+        for _, t in self._map_tensor.items():
+
+            self.collapse_repeated_indice(t)
+
+    
+    def antidiagonal_reduce(
+        self,
+        output_inds,
+        atol=1e-12,
+    ):
+        """
+        Find out antidiagonal tensors and collapse those axes. This will create 'hyper' edges.
+        A--D--B will become    D
+                               |
+                             A----B  
+
+        Parameters
+        ----------
+        output_inds : list(str), Outer indices of the tensor network and thus not change. 
+        atol : float, optional, The absolute tolerance compared to zero when identifying antidiagonal tensors.
+            which to compare to zero with.
+        See Also
+        --------
+        squeeze fuse_multi_edges
+        """
+
+        cache = set()
+
+        queue = list(self._map_tensor)
+        while queue:
+            t_ids = queue.pop()
+            t = self._map_tensor[t_ids]
+
+            cache_key = ('dr', t_ids, id(t.data))
+            if cache_key in cache:
+                continue
+
+            ab = get_antidiag_axes(t.data, atol=atol)
+
+            # if no diagonal axes
+            if ab is None:
+                cache.add(cache_key)
+                continue
+
+            a, b = ab
+            inds_a, inds_b = t.indices[a], t.indices[b]
+            if inds_a not in output_inds:
+                # transfer flip inds_a
+                flip_inds = inds_a
+
+            else:
+                if inds_b in output_inds:
+                    # both indices are outer indices, skip them
+                    continue
+                # make sure output indice inds_a will be kept;
+                flip_inds = inds_b
+                
+
+            #print("flip ", flip_inds)
+            # self.operands inside flip function
+            self.flip(flip_inds)
+
+
+            # do diagonal reduce after flipping
+            self.diagonal_reduce(output_inds=output_inds)
+
+            # this tensor might still has other diagonal axes
+            queue.append(t_ids)
+
+
+    
+    def weighted_rank_simplify(
+        self,
+        output_inds,
+        max_combinations=1000,
+    ):
+        """Performing contractions of near by tensors that don't increase the weighted rank.
+        Parameters
+
+        Parameters
+        ----------
+        output_inds : list(str), Outer indices of the tensor network and thus not change. 
+        max_combinations : int, maximum pair combinations of tensors connected by an index.
+
+        See Also
+        --------
+        squeeze fuse_multi_edges
+        """
+
+        # repeated index checking
+        for t in self.tensors:
+            self.collapse_repeated_indice(t)
+
+        # scalar checking
+        self.elliminate_scalar()
+
+        # update the size dict, will be used in weighting
+        self.update_size_dict()
+
+        cache = set()
+
+        counts = collections.Counter()
+
+        # count the freqency of each index
+        for t in self.tensors:
+            counts.update(t.indices)
+
+        # + 1 for all output indices, so that it will not be pick up to contract
+        counts.update(output_inds)
+
+
+        queue = set(self._map_index)
+        while queue:
+            index = queue.pop()
+            try:
+                t_ids_set = self._map_index[index]
+            except KeyError:
+                continue # index already contracted out in previous process.
+
+            # index only appears in one tensor and it is not an output index, can be summed over
+            if counts[index] == 1:
+                tid = tids[0]
+                t = self._map_tensor[tid]
+                dim = t.sum_over(index)
+
+                i = self.tensors.index(t)
+                operand = ('sum_over', i, dim)
+                self._operands.append(operand)
+
+                # finish this index processing
+                continue
+
+            # otherwise try pairwise contractions
+            trials = []
+            num_combi = 0
+
+            for tid_a, tid_b in itertools.combinations(t_ids_set, 2):
+
+                ta = self._map_tensor[tid_a]
+                tb = self._map_tensor[tid_b]
+
+                cache_key = ('rs', tid_a, tid_b, id(ta.data), id(tb.data))
+                if cache_key in cache:
+                    continue
+
+                num_combi += 1
+
+                # work out the output indices of candidate contraction
+                input_indices = []
+                input_indices.extend(ta.indices)
+                input_indices.extend(tb.indices)
+                in_fre = toolz.frequencies(input_indices) # dict of input indices and frequencies
+
+                output_indices = []
+                # count of index need to be - 1; A_ab B_ac ->C_abc, count of a reduce by 1
+                de_count = []
+                for index, c in in_fre.items():
+                    if c != counts[index]:
+                        output_indices.append(index)
+                        if c == 2:
+                            de_count.append(index)
+
+                # check if candidate contraction will reduce weighted rank
+                wr_a = np.prod([self.size_dict[index] for index in ta.indices])
+                wr_b = np.prod([self.size_dict[index] for index in ta.indices])
+                wr_o = np.prod([self.size_dict[index] for index in output_indices])
+
+                wr_i = max(wr_a, wr_b)
+
+                if wr_o <= wr_i:
+                    candi = (wr_o - wr_i, tid_a, tid_b, output_indices, de_count)
+                    trials.append(candi)
+                else:
+                    cache.add(cache_key)
+
+                # stop if candidate found and reach maximum trials
+                if trials and (num_combi > max_combinations):
+                    break
+
+            
+            if trials:
+                # selected the one that reduces the weighted rank most
+                candidate = min(trials)
+                _, tid_a, tid_b, output_indices, de_count = candidate
+                ta = self._map_tensor[tid_a]
+                tb = self._map_tensor[tid_b]
+
+                inds_a = ta.indices
+                inds_b = tb.indices
+
+                input_inds = set()
+                input_inds = input_inds | set(inds_a)
+                input_inds = input_inds | set(inds_b)
+
+                if len(input_inds) > 52:
+                    raise ValueError(f'Error! This tensor too large for performing einsum')
+
+                down_dict = {}
+                for i, scr in enumerate(input_inds):
+                    down_dict[scr] = i
+
+                einsum_str = ''.join(tuple(_EINSUM_SYMBOLS_BASE[down_dict[scr]] for scr in inds_a))
+                einsum_str += ','
+                einsum_str += ''.join(tuple(_EINSUM_SYMBOLS_BASE[down_dict[scr]] for scr in inds_b))
+                einsum_str += '->'
+                einsum_str += ''.join(tuple(_EINSUM_SYMBOLS_BASE[down_dict[scr]] for scr in output_indices))
+                #print(einsum_str)
+
+                data_a = ta.data
+                data_b = tb.data
+                data_o = np.einsum(einsum_str, data_a, data_b)
+                size = [self.size_dict[index] for index in output_indices]
+
+                t_new = Tensor(data_o, output_indices, size)
+
+                # ATTENTION!!! position j must be found after tensor_i has been pop!!
+                # Since pop(i) will delete tensor_i and then affect position of j!!!
+                # delete old tensors
+                i = self.tensors.index(ta)
+                self._tensors.pop(i)
+
+                j = self.tensors.index(tb)
+                self._tensors.pop(j)
+
+                # add new tensors
+                self._tensors.append(t_new)
+
+                # check outputs indices again
+                for index in output_indices:
+                    queue.add(index)
+
+                operand = ('einsum', i, j, einsum_str)
+                self._operands.append(operand)
+
+                # update the tensor network
+                self.mapping_tensors()
+                self.mapping_indices()
+
+
+                # decrease the counts
+                for index in de_count:
+                    counts[index] -= 1
+
+            else:
+                # No pairwise contraction found for this index
+                continue
+
+        # elliminate scalar tensors produced this simplification
+        self.elliminate_scalar()
+        self.update_tn()
+
+
+
+  
+
+
+    def flip(self, flip_inds):
+        """Flip the dimension corresponding to index ``flip_inds`` on all tensors
+        that share it.
+        """
+        t_ids_set = self._map_index[flip_inds]
+
+        for tid in t_ids_set:
+            t = self._map_tensor[tid]
+            flipper = t.flip(flip_inds)
+
+            i = self.tensors.index(t)
+            assert tid == i
+            operand = ('flip', i, flipper)
+            self._operands.append(operand)
+
+    def replace_indice(self, old_inds, new_inds):
+        """Rename indices of all tensors in the tensor network
+        Parameters
+        ----------
+        old_inds : old index that need to be transferred
+        new_inds : new index that to be transferred to
+        }
+        """
+
+        t_ids_set = self._map_index[old_inds]
+        #print(t_ids_set)
+
+        for tid in t_ids_set:
+            t = self._map_tensor[tid]
+            #print(t.indices)
+            t.reindex(old_inds, new_inds)
+            #print(t.indices)
+
+    def collapse_repeated_indice(self, t):
+        einsum_str = t.collapse_repeated_indice()
+        #print(einsum_str)
+            
+        if einsum_str is not None:
+            i = self.tensors.index(t)
+            #print("i", i)
+            operand = ('einsum', i, einsum_str)
+            self._operands.append(operand)
+
 
 
     def update_tn(self):
@@ -409,7 +671,7 @@ class TensorNetwork():
         update the indices.
         '''
         self._input_indices = []
-        for t in self._tensors:  # pylint: disable=invalid-name
+        for t in self.tensors:  # pylint: disable=invalid-name
             self._input_indices.append(t.indices)
 
     def update_size_dict(self):
@@ -417,7 +679,7 @@ class TensorNetwork():
         update the size_dict
         '''
         self._size_dict = {}
-        for t in self._tensors:  # pylint: disable=invalid-name
+        for t in self.tensors:  # pylint: disable=invalid-name
             for indice, size in zip(t.indices, t.size):
                 old_size = self._size_dict.get(indice, None)# old version: get(indice, default=None), but now don't need keyword 'default'
                 if old_size:
@@ -497,20 +759,30 @@ def gen_tensor_networks(num_qubits, operators, appliedqubits, measurements):
         if len_qbts == 1:
             _current_ids = _current_ids + 1
             _input_indices.append(
-                [get_symbol(_layer_ids[qbts[0]]), get_symbol(_current_ids)])
+                #[get_symbol(_layer_ids[qbts[0]]), get_symbol(_current_ids)]
+                [get_symbol(_current_ids), get_symbol(_layer_ids[qbts[0]])]
+            )
             _layer_ids[qbts[0]] = _current_ids
 
         elif len_qbts == 2:
             _current_ids = _current_ids + 2
-            _input_indices.append([get_symbol(_layer_ids[qbts[0]]), get_symbol(
-                _layer_ids[qbts[1]]), get_symbol(_current_ids - 1), get_symbol(_current_ids)])
+            _input_indices.append(
+                #[get_symbol(_layer_ids[qbts[0]]), get_symbol(
+                #_layer_ids[qbts[1]]), get_symbol(_current_ids - 1), get_symbol(_current_ids)]
+                [get_symbol(_current_ids - 1), get_symbol(_current_ids), 
+                get_symbol(_layer_ids[qbts[0]]), get_symbol(_layer_ids[qbts[1]])]
+            )
             _layer_ids[qbts[0]] = _current_ids - 1
             _layer_ids[qbts[1]] = _current_ids
 
         elif len_qbts == 3:
             _current_ids = _current_ids + 3
-            _input_indices.append([get_symbol(_layer_ids[qbts[0]]), get_symbol(_layer_ids[qbts[1]]), get_symbol(
-                _layer_ids[qbts[2]]), get_symbol(_current_ids - 2), get_symbol(_current_ids - 1), get_symbol(_current_ids)])
+            _input_indices.append(
+                #[get_symbol(_layer_ids[qbts[0]]), get_symbol(_layer_ids[qbts[1]]), get_symbol(
+                #_layer_ids[qbts[2]]), get_symbol(_current_ids - 2), get_symbol(_current_ids - 1), get_symbol(_current_ids)]
+                [get_symbol(_current_ids - 2), get_symbol(_current_ids - 1), get_symbol(_current_ids), 
+                get_symbol(_layer_ids[qbts[0]]), get_symbol(_layer_ids[qbts[1]]), get_symbol(_layer_ids[qbts[2]])]
+            )
             _layer_ids[qbts[0]] = _current_ids - 2
             _layer_ids[qbts[1]] = _current_ids - 1
             _layer_ids[qbts[2]] = _current_ids
@@ -554,12 +826,25 @@ def gen_tensor_networks(num_qubits, operators, appliedqubits, measurements):
         else:
 
             if measurement.return_type is Expectation:
-                _current_ids_i = _current_ids_i + 1
-                layer = measurement.obs.qubits[0]
-                _input_indices_i.append(
-                    [get_symbol(_layer_ids_i[layer]), get_symbol(_current_ids_i)])
-                _layer_ids_i[layer] = _current_ids_i
-                _input_arrays_i.append(measurement.obs.matrix)
+
+                # multiple qubits expectation value measurement.
+                if isinstance(measurement.obs, list):
+                    for ob in measurement.obs:
+                        _current_ids_i = _current_ids_i + 1
+                        layer = ob.qubits[0]
+                        _input_indices_i.append(
+                            [get_symbol(_current_ids_i), get_symbol(_layer_ids_i[layer])])
+                        _layer_ids_i[layer] = _current_ids_i
+                        _input_arrays_i.append(ob.matrix)
+
+                # single qubit expectation value measurement.
+                else:
+                    _current_ids_i = _current_ids_i + 1
+                    layer = measurement.obs.qubits[0]
+                    _input_indices_i.append(
+                        [get_symbol(_current_ids_i), get_symbol(_layer_ids_i[layer])])
+                    _layer_ids_i[layer] = _current_ids_i
+                    _input_arrays_i.append(measurement.obs.matrix)
 
             if measurement.return_type is Probability:
                 if measurement.qubits is None:
@@ -578,20 +863,32 @@ def gen_tensor_networks(num_qubits, operators, appliedqubits, measurements):
                 if len_qbts == 1:
                     _current_ids_i = _current_ids_i + 1
                     _input_indices_i.append(
-                        [get_symbol(_layer_ids_i[qbts[0]]), get_symbol(_current_ids_i)])
+                        #[get_symbol(_layer_ids_i[qbts[0]]), get_symbol(_current_ids_i)]
+                        [get_symbol(_current_ids_i), get_symbol(_layer_ids_i[qbts[0]])]
+                        )
                     _layer_ids_i[qbts[0]] = _current_ids_i
 
                 elif len_qbts == 2:
                     _current_ids_i = _current_ids_i + 2
-                    _input_indices_i.append([get_symbol(_layer_ids_i[qbts[0]]), get_symbol(
-                        _layer_ids_i[qbts[1]]), get_symbol(_current_ids_i - 1), get_symbol(_current_ids_i)])
+                    _input_indices_i.append(
+                        #[get_symbol(_layer_ids_i[qbts[0]]), get_symbol(_layer_ids_i[qbts[1]]), 
+                        #get_symbol(_current_ids_i - 1), get_symbol(_current_ids_i)]
+                        [get_symbol(_current_ids_i - 1), get_symbol(_current_ids_i), 
+                        get_symbol(_layer_ids_i[qbts[0]]), get_symbol(_layer_ids_i[qbts[1]])]
+                    )
                     _layer_ids_i[qbts[0]] = _current_ids_i - 1
                     _layer_ids_i[qbts[1]] = _current_ids_i
 
                 elif len_qbts == 3:
                     _current_ids_i = _current_ids_i + 3
-                    _input_indices_i.append([get_symbol(_layer_ids_i[qbts[0]]), get_symbol(_layer_ids_i[qbts[1]]), get_symbol(
-                        _layer_ids_i[qbts[2]]), get_symbol(_current_ids_i - 2), get_symbol(_current_ids_i - 1), get_symbol(_current_ids_i)])
+                    _input_indices_i.append(
+                        #[get_symbol(_layer_ids_i[qbts[0]]), get_symbol(_layer_ids_i[qbts[1]]), 
+                        #get_symbol(_layer_ids_i[qbts[2]]), get_symbol(_current_ids_i - 2), 
+                        #get_symbol(_current_ids_i - 1), get_symbol(_current_ids_i)]
+                        [get_symbol(_current_ids_i - 2), get_symbol(_current_ids_i - 1), 
+                        get_symbol(_current_ids_i), get_symbol(_layer_ids_i[qbts[0]]), 
+                        get_symbol(_layer_ids_i[qbts[1]]), get_symbol(_layer_ids_i[qbts[2]])]
+                    )
                     _layer_ids_i[qbts[0]] = _current_ids_i - 2
                     _layer_ids_i[qbts[1]] = _current_ids_i - 1
                     _layer_ids_i[qbts[2]] = _current_ids_i
@@ -607,9 +904,10 @@ def gen_tensor_networks(num_qubits, operators, appliedqubits, measurements):
                 _input_arrays_i.append(operators[idx].matrix.reshape(matrix_shape))
 
 
-        for i in _layer_ids_i:
-            _input_indices_i.append(list(get_symbol(i)))
-            _input_arrays_i.append(np.array([1., 0.]))
+            # state measurement don't need this
+            for i in _layer_ids_i:
+                _input_indices_i.append(list(get_symbol(i)))
+                _input_arrays_i.append(np.array([1., 0.]))
 
         _size_dict_i = {}
 
@@ -625,6 +923,8 @@ def gen_tensor_networks(num_qubits, operators, appliedqubits, measurements):
     tensor_networks = []
     for operand in tn_operands:
         (input_arrays, input_indices, output_indices, size_dict) = operand
+        #print(input_indices, output_indices)
+        #print(input_arrays, size_dict)
         tensor_network = TensorNetwork(input_arrays, input_indices, output_indices, size_dict)
         tensor_networks.append(tensor_network)
 

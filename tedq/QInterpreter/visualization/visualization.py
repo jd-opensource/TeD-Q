@@ -166,40 +166,99 @@ class matplotlib_drawer(object):
         
         for measurement in measurements:
             if measurement.return_type == Expectation:
-                (pos_x, pos_y) = self._GetXYPosFromXYIndex(head_of_wires, measurement.obs.qubits[0])
-                self._DrawQuantumWire(head_of_wires-0.5, measurement.obs.qubits[0])
-                gate_w = self._gate_dx
-                gate_h = self._gate_dy  
+
+                # multiple qubits expectation value measurement.
+                if isinstance(measurement.obs, list):
+                    for ob in measurement.obs:
+                        
+                        (pos_x, pos_y) = self._GetXYPosFromXYIndex(head_of_wires, ob.qubits[0])
+                        self._DrawQuantumWire(head_of_wires-0.5, ob.qubits[0])
+                        gate_w = self._gate_dx
+                        gate_h = self._gate_dy  
+        
+                        self._PlotRectangle(pos_x, pos_y, gate_w, gate_h, facecolor="white", edgecolor="black",linewidth = self._line_width*0.5)
+                        
+                        circle = self._patch.Arc(
+                            xy=(pos_x, pos_y+0.2*gate_h),
+                            width=-gate_w*0.8,
+                            height=-gate_h*0.8,
+                            # fc=fc,
+                            # ec=ec,
+                            linewidth=self._line_width*0.5,
+                            zorder=6,
+                            theta1=0,
+                            theta2=180,
+                            color="black",
+                        )
+                    
+                        self._ax.text(
+                            pos_x - 0.35 * gate_w,
+                            pos_y - 0.3 * gate_h,
+                            SingleQubitGates[ob.name],
+                            ha="center",
+                            va="center",
+                            fontsize=self._font_size,
+                            # color=gt,
+                            clip_on=True,
+                            zorder=7,
+                        )
+                        self._ax.add_patch(circle)
+                        self._ax.arrow(
+                            pos_x, 
+                            pos_y+0.2*gate_h, 
+                            gate_w*0.5/2, 
+                            -gate_h*0.5/2, 
+                            zorder=7, 
+                            width=abs(gate_w*0.2*0.01),
+                            head_width=abs(gate_w*0.8*0.01), 
+                            color="black",
+                        )
+
+                # single qubit expectation value measurement.
+                else:
+                    (pos_x, pos_y) = self._GetXYPosFromXYIndex(head_of_wires, measurement.obs.qubits[0])
+                    self._DrawQuantumWire(head_of_wires-0.5, measurement.obs.qubits[0])
+                    gate_w = self._gate_dx
+                    gate_h = self._gate_dy  
     
+                    self._PlotRectangle(pos_x, pos_y, gate_w, gate_h, facecolor="white", edgecolor="black",linewidth = self._line_width*0.5)
 
-                self._PlotRectangle(pos_x, pos_y, gate_w, gate_h, facecolor="white", edgecolor="black",linewidth = self._line_width*0.5)    
-
-                circle = self._patch.Arc(
-                    xy=(pos_x, pos_y+0.2*gate_h),
-                    width=-gate_w*0.8,
-                    height=-gate_h*0.8,
-                    # fc=fc,
-                    # ec=ec,
-                    linewidth=self._line_width*0.5,
-                    zorder=6,
-                    theta1=0,
-                    theta2=180,
-                    color="black",
-                )
+                    circle = self._patch.Arc(
+                        xy=(pos_x, pos_y+0.2*gate_h),
+                        width=-gate_w*0.8,
+                        height=-gate_h*0.8,
+                        # fc=fc,
+                        # ec=ec,
+                        linewidth=self._line_width*0.5,
+                        zorder=6,
+                        theta1=0,
+                        theta2=180,
+                        color="black",
+                    )
                 
-                self._ax.text(
-                    pos_x - 0.35 * gate_w,
-                    pos_y - 0.3 * gate_h,
-                    SingleQubitGates[measurement.obs.name],
-                    ha="center",
-                    va="center",
-                    fontsize=self._font_size,
-                    # color=gt,
-                    clip_on=True,
-                    zorder=7,
-                )
-                self._ax.add_patch(circle)
-                self._ax.arrow(pos_x, pos_y+0.2*gate_h, gate_w*0.5/2, -gate_h*0.5/2, zorder=7, width=abs(gate_w*0.2*0.01),head_width=abs(gate_w*0.8*0.01), color="black")
+                    self._ax.text(
+                        pos_x - 0.35 * gate_w,
+                        pos_y - 0.3 * gate_h,
+                        SingleQubitGates[measurement.obs.name],
+                        ha="center",
+                        va="center",
+                        fontsize=self._font_size,
+                        # color=gt,
+                        clip_on=True,
+                        zorder=7,
+                    )
+                    self._ax.add_patch(circle)
+                    self._ax.arrow(
+                        pos_x, 
+                        pos_y+0.2*gate_h, 
+                        gate_w*0.5/2, 
+                        -gate_h*0.5/2, 
+                        zorder=7, 
+                        width=abs(gate_w*0.2*0.01),
+                        head_width=abs(gate_w*0.8*0.01), 
+                        color="black",
+                    )
+    
     def _ParseCircuitHead(self):
         operators = self._circuit.operators
         head_of_wires = [0 for i in range(self._qubit_num)]

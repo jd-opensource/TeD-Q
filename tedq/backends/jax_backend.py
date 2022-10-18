@@ -111,6 +111,7 @@ class JaxBackend(CompiledCircuit):
 
         elif self._interface == "pytorch":
             call_fcn = self.execute_func(self.interface_kwargs, *params)
+            #print(call_fcn)
 
         else:
             raise ValueError(
@@ -136,14 +137,23 @@ class JaxBackend(CompiledCircuit):
                 arrays.extend(zero_state)
                 arrays.extend(self._operands)
                 if self.measurements[i].return_type is Expectation:
-                    arrays.append(self._tensor_of_gate(
-                        self.measurements[i].obs.name, []))
+
+                    # multiple qubits expectation value measurement.
+                    if isinstance(self.measurements[i].obs, list):
+                        raise ValueError("JAX backend do not support multiple qubits expectation value measurement!!")
+
+                    # single qubit expectation value measurement.
+                    else:
+                        arrays.append(self._tensor_of_gate(
+                            self.measurements[i].obs.name, []))
+
                     arrays.extend(self._adjointoperands)
                     arrays.extend(zero_state)
                     result = self._optimize_order_trees[i].contract(
                         arrays, backend='jax')
                     result = jnp.squeeze(jnp.real(result))
                     results.append(result.reshape(()))
+
                 if self.measurements[i].return_type is Probability:
                     arrays.extend(self._adjointoperands)
                     arrays.extend(zero_state)
@@ -151,6 +161,7 @@ class JaxBackend(CompiledCircuit):
                         arrays, backend='jax')
                     result = jnp.squeeze(jnp.real(result))
                     results.append(result)
+
                 if self.measurements[i].return_type is State:
                     arrays.extend(zero_state)
                     result = self._optimize_order_trees[i].contract(
@@ -172,15 +183,25 @@ class JaxBackend(CompiledCircuit):
 
                 arrays.extend(zero_state)
                 arrays.extend(self._operands)
+
                 if self.measurements[i].return_type is Expectation:
-                    arrays.append(self._tensor_of_gate(
-                        self.measurements[i].obs.name, []))
+
+                    # multiple qubits expectation value measurement.
+                    if isinstance(self.measurements[i].obs, list):
+                        raise ValueError("JAX backend do not support multiple qubits expectation value measurement!!")
+
+                    # single qubit expectation value measurement.
+                    else:
+                        arrays.append(self._tensor_of_gate(
+                            self.measurements[i].obs.name, []))
+
                     arrays.extend(self._adjointoperands)
                     arrays.extend(zero_state)
                     result = self._optimize_order_trees[i].contract(
                         arrays, backend='jax')
                     result = jnp.squeeze(jnp.real(result))
                     results.append(result.reshape(()))
+
                 if self.measurements[i].return_type is Probability:
                     arrays.extend(self._adjointoperands)
                     arrays.extend(zero_state)
@@ -188,6 +209,7 @@ class JaxBackend(CompiledCircuit):
                         arrays, backend='jax')
                     result = jnp.squeeze(jnp.real(result))
                     results.append(result)
+
                 if self.measurements[i].return_type is State:
                     arrays.extend(zero_state)
                     result = self._optimize_order_trees[i].contract(
@@ -204,15 +226,25 @@ class JaxBackend(CompiledCircuit):
                               for _ in range(self._num_qubits)]
                 arrays.extend(zero_state)
                 arrays.extend(self._operands)
+
                 if self.measurements[i].return_type is Expectation:
-                    arrays.append(self._tensor_of_gate(
-                        self.measurements[i].obs.name, []))
+
+                    # multiple qubits expectation value measurement.
+                    if isinstance(self.measurements[i].obs, list):
+                        raise ValueError("JAX backend do not support multiple qubits expectation value measurement!!")
+
+                    # single qubit expectation value measurement.
+                    else:
+                        arrays.append(self._tensor_of_gate(
+                            self.measurements[i].obs.name, []))
+                        
                     arrays.extend(self._adjointoperands)
                     arrays.extend(zero_state)
                     result = self._optimize_order_trees[i].contract(
                         arrays)
                     result = jnp.squeeze(jnp.real(result))
                     results.append(result.reshape(()))
+
                 if self.measurements[i].return_type is Probability:
                     arrays.extend(self._adjointoperands)
                     arrays.extend(zero_state)
@@ -220,6 +252,7 @@ class JaxBackend(CompiledCircuit):
                         arrays)
                     result = jnp.squeeze(jnp.real(result))
                     results.append(result)
+
                 if self.measurements[i].return_type is State:
                     arrays.extend(zero_state)
                     result = self._optimize_order_trees[i].contract(
@@ -256,21 +289,28 @@ class JaxBackend(CompiledCircuit):
         results = []
         for meas in self.measurements:
             if meas.return_type is Expectation:
-                perms = (
-                    list(range(1, meas.obs.qubits[0] + 1))
-                    + [0]
-                    + list(range(meas.obs.qubits[0] + 1, self._num_qubits))
-                )
-                tmpt = self._tensor_of_gate(meas.obs.name, [])
-                tmpt = jnp.tensordot(
-                    tmpt, state, axes=([1], meas.obs.qubits)
-                )  # order need to change!
-                tmpt = jnp.transpose(tmpt, perms)
-                axes = list(range(self._num_qubits))
-                tmpt = jnp.tensordot(jnp.conjugate(
-                    state), tmpt, axes=(axes, axes))
-                result = jnp.squeeze(jnp.real(tmpt))
-                results.append(result.reshape(()))
+
+                # multiple qubits expectation value measurement.
+                if isinstance(meas.obs, list):
+                    raise ValueError("JAX backend do not support multiple qubits expectation value measurement!!")
+
+                # single qubit expectation value measurement.
+                else:
+                    perms = (
+                        list(range(1, meas.obs.qubits[0] + 1))
+                        + [0]
+                        + list(range(meas.obs.qubits[0] + 1, self._num_qubits))
+                    )
+                    tmpt = self._tensor_of_gate(meas.obs.name, [])
+                    tmpt = jnp.tensordot(
+                        tmpt, state, axes=([1], meas.obs.qubits)
+                    )  # order need to change!
+                    tmpt = jnp.transpose(tmpt, perms)
+                    axes = list(range(self._num_qubits))
+                    tmpt = jnp.tensordot(jnp.conjugate(
+                        state), tmpt, axes=(axes, axes))
+                    result = jnp.squeeze(jnp.real(tmpt))
+                    results.append(result.reshape(()))
 
             if meas.return_type is Probability:
                 if meas.qubits is None:

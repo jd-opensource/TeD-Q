@@ -1612,7 +1612,7 @@ class Unitary(GateBase):
 
 
     **Properties**
-        * # of qubits: Any
+        * # of qubits: 1~4
         * # of parameters: 0
 
     Args:

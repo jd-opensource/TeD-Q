@@ -661,7 +661,7 @@ class circuit_composer:
         self._fig.canvas.flush_events()
 
     def toCircuit(self):
-        circuit_material = {"operators": self.operators, "measurements": self.measurements}
+        circuit_material = {"operators": self.operators, "measurements": self.measurements, "init_state": None}
         circuit = Circuit(circuit_material, self._qubit_num)
         return circuit
 

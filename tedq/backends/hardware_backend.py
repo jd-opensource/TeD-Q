@@ -215,6 +215,8 @@ class HardwareBackend():
                 # print(element.requires_grad)
         #print("input parameters:   ", new_params)
         result = self.real_execute(*new_params)
+        result = result.to(self._device)
+        #print(result)
         return result
 
     def real_execute(self, *params):
@@ -239,6 +241,9 @@ class HardwareBackend():
 
         probabilities = torch.from_numpy(self._probabilities)
         results = self.get_measurement_results(probabilities)
+
+        if len(results) == 1:
+            return results[0]
 
         #output must be a torch.tensor form
         try:

@@ -61,15 +61,35 @@ class QuantumMeasurement:
             # Obtain the current quantum circuit warehouse.
             _active_warehouse = GlobalVariables.get_value("global_deque")
             if bool(_active_warehouse):
-                # Obtain the last ``Operator`` of current quantum circuit.
-                last_content = _active_warehouse[-1].storage_context[-1]
-                # The last operator should be the ``obs``, replace it
-                # withe the measurement process.
-                if last_content.instance_id == self.obs.instance_id:
-                    _active_warehouse[-1].remove(self.obs)
-                    _active_warehouse[-1].append(self)
+                
+                # multiple qubits expectation value measurement.
+                if isinstance(self.obs, list):
+                    # count from the last one
+                    for ob in reversed(self.obs):
+                        # Obtain the last ``Operator`` of current quantum circuit.
+                        last_content = _active_warehouse[-1].storage_context[-1]
+                        # The last operator should be the ``ob``, replace it
+                        # withe the measurement process.
+                        if last_content.instance_id == ob.instance_id:
+                            _active_warehouse[-1].remove(ob)
+                        else:
+                            raise ValueError("Last content operator should be the same as 'obs'!")
+                    # append the measurement into the queue
+                    _active_warehouse[-1].append(self)                       
+
+
+
+                # single qubit expectation value measurement.
                 else:
-                    raise ValueError("Last content operator should be the same as 'obs'!")
+                    # Obtain the last ``Operator`` of current quantum circuit.
+                    last_content = _active_warehouse[-1].storage_context[-1]
+                    # The last operator should be the ``obs``, replace it
+                    # withe the measurement process.
+                    if last_content.instance_id == self.obs.instance_id:
+                        _active_warehouse[-1].remove(self.obs)
+                        _active_warehouse[-1].append(self)
+                    else:
+                        raise ValueError("Last content operator should be the same as 'obs'!")
             else:
                 raise QuantumCircuitError("No active warehouse, tedq software is problematic, need to check 'global_variables.py'")
 
@@ -102,6 +122,8 @@ def expval(observable, do_queue=True):
             qai.CNOT(qubits=[0,1])
             qai.RY(params[1], qubits=[0])
             return qai.expval(qai.PauliZ(qubits=[0]))
+            # for ZZ measurement
+            #return qai.expval([qai.PauliZ(qubits=[0]), qai.PauliZ(qubits=[1])])
         #compile the quantum circuit
         circuit = qai.Circuit(circuitDef, 2, 0.54, 0.12)
         my_compilecircuit = circuit.compilecircuit(backend="jax")
@@ -113,10 +135,21 @@ def expval(observable, do_queue=True):
 
     
     """
-    if not isinstance(observable, ObservableBase):
-        raise QuantumValueError(
-            f'{observable.name} is not a subclass of ObservableBase: cannot be used with expval'
-        )
+    # multiple qubits expectation value measurement.
+    if isinstance(observable, list):
+        for ob in observable:
+            if not isinstance(ob, ObservableBase):
+                raise QuantumValueError(
+                    f'{ob.name} is not a subclass of ObservableBase: cannot be used with expval'
+                )
+
+
+    # single qubit expectation value measurement.
+    else:
+        if not isinstance(observable, ObservableBase):
+            raise QuantumValueError(
+                f'{observable.name} is not a subclass of ObservableBase: cannot be used with expval'
+            )
 
     return QuantumMeasurement(Expectation, obs=observable, do_queue=do_queue)
 
