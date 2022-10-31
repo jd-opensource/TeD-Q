@@ -45,7 +45,7 @@ class CompiledCircuit:
     '''
 
     # pylint: disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
-    def __init__(self, backend, circuit, use_cotengra=False, use_jdopttn=False, tn_mode=False, hyper_opt=None, tn_simplify=False):
+    def __init__(self, backend, circuit, use_cotengra=False, use_jdopttn=False, tn_mode=False, hyper_opt=None, tn_simplify=False, print_output=False):
 
         self._use_cotengra = use_cotengra
         self._use_jdopttn = use_jdopttn
@@ -187,8 +187,8 @@ class CompiledCircuit:
 
         self._axeslist.reverse()
         self._permutationlist.reverse()
-
-        print("log10(flops) of this quantum circuit:  ", math.log10(flops+1.0e-10))
+        if print_output:
+            print("log10(flops) of this quantum circuit:  ", math.log10(flops+1.0e-10))
 
         #print(self._tn_mode)
         if self._use_cotengra or self._use_jdopttn or self._tn_mode:
