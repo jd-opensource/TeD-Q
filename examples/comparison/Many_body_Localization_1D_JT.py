@@ -109,9 +109,9 @@ def circuitDef(d, params):
     # Trainable theta and phi
     for i in range(n_qubits):
         #print(i)
-        qai.RZ(params[2*i], qubits=[i])
+        qai.RY(params[2*i], qubits=[i])
         qai.RX(params[2*i+1], qubits=[i])
-        qai.RZ(-params[2*i], qubits=[i])
+        qai.RY(-params[2*i], qubits=[i])
     
     # H0 dt 
     
@@ -128,9 +128,9 @@ def circuitDef(d, params):
     
     
     # Last rotation  
-    qai.RZ(params[2*n_qubits], qubits=[n_qubits-1])
+    qai.RY(params[2*n_qubits], qubits=[n_qubits-1])
     qai.RX(params[2*n_qubits+1], qubits=[n_qubits-1])
-    qai.RZ(-params[2*n_qubits], qubits=[n_qubits-1])
+    qai.RY(-params[2*n_qubits], qubits=[n_qubits-1])
     #RZ
     
 #     qai.measurement.expval(qai.PauliZ(qubits=[0]))

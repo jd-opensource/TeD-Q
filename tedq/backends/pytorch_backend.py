@@ -113,6 +113,8 @@ class PyTorchBackend(CompiledCircuit):
         # some quantum circuits do not need any input parameters
         if params:
             self._device = params[0].device
+        else:
+            self._device = None
         #print("1:  ", self._device)
 
 
@@ -121,6 +123,7 @@ class PyTorchBackend(CompiledCircuit):
         '''
         internal call function
         '''
+        #print(params)
 
         # check wether all parameters are in the same device
         self.check_parameters_torch_device(params)
