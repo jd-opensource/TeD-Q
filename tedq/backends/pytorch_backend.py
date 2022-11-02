@@ -454,15 +454,19 @@ class PyTorchBackend(CompiledCircuit):
         '''
         Get complex conjugate of that tensor
         '''
-        
+        ts = ts.clone()
         shape = ts.shape
         shape_tensor = torch.tensor(shape)
         prod_shape = torch.prod(shape_tensor)
         new_size = int(torch.sqrt(prod_shape))
         new_shape = (new_size, new_size)
 
+        ts = ts.view(-1)
+        for i in range(prod_shape):
+            ts[i] = ts[i].conj()
+
         ts = ts.reshape(new_shape)
-        ts = ts.conj()
+        #ts = ts.conj()
         ts = ts.T
         ts = ts.reshape(shape)
         

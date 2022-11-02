@@ -142,10 +142,10 @@ N = (n_size-1)*2
 
 circuit = qai.Circuit(circuitDef, n_qubits, torch.rand(N, device=device), torch.rand(n_qubits+1,2, device=device))
 
-#my_compilecircuit = circuit.compilecircuit(backend="pytorch" )
+my_compilecircuit_0 = circuit.compilecircuit(backend="pytorch" )
 
 from jdtensorpath import JDOptTN as jdopttn
-slicing_opts = None#{'target_size':2**28, 'repeats':100, 'target_num_slices':1, 'contract_parallel':False}
+slicing_opts = {'target_size':2**28, 'repeats':100, 'target_num_slices':2**2, 'contract_parallel':'distributed_CPU'}#'distributed_CPU'
 hyper_opt = {'methods':['kahypar'], 'max_time':120, 'max_repeats':56, 'progbar':True, 'minimize':'flops', 'search_parallel':True, 'slicing_opts':slicing_opts}
 my_compilecircuit = circuit.compilecircuit(backend="pytorch", use_jdopttn=jdopttn, hyper_opt = hyper_opt, tn_simplify = False)
 
@@ -176,9 +176,31 @@ target_list = [0 for _ in range(n_train)]
 y_list = [0 for _ in range(n_train)]
 
 
+def loss_function_0(_d, params, y_target):
+    
+    loss = nn.BCELoss(reduction='mean')
+    cir_params = torch.cat((params, -params[:,0].view(-1,1)),1)
+    #print(_d)
+    #print(cir_params)
+    y = my_compilecircuit_0(_d, cir_params)
+    #print(y)
+        
+    diff = y[0][1] - 0.6
+    if diff > 0:
+        diff = diff*5./4. + 0.5
+    else:
+        diff = diff*5./6. + 0.5
+        
+    diff = y[0][1]
+        
+    #print(y[0][1], diff, y_target)
+    l = loss(diff, y_target)
+    
+    return (l, diff)
 
 
-def loss_function(_d, params):
+
+def loss_function(_d, params, y_target):
     
     loss = nn.BCELoss(reduction='mean')
     cir_params = torch.cat((params, -params[:,0].view(-1,1)),1)
@@ -195,12 +217,12 @@ def loss_function(_d, params):
         
     diff = y[0][1]
         
-    #print(y[0][1], diff, y_target[i])
-    l = loss(diff, y_target[i])
+    #print(y[0][1], diff, y_target)
+    l = loss(diff, y_target)
     
     return (l, diff)
 
-run = run_distributed(2, 0)
+run = run_distributed(4, 0)
 run.set_circuit(loss_function, backward_index=0)
 
 time_start = time.time()
@@ -211,7 +233,18 @@ for epoch in range(n_epoch):
     
     for i in rnd_sq:
 
-        (l, y_list[i]) = run(d[i], params)
+        #print('  ')
+        #run.set_circuit(loss_function_0, backward_index=0)
+        #optimizer.zero_grad()
+        (l, y_list[i]) = run(d[i], params, y_target[i])
+        #print(l, params.grad)
+
+
+        # run.set_circuit(loss_function_0, backward_index=0)
+        # optimizer.zero_grad()
+        # (l, y_list[i]) = run(d[i], params, y_target[i])
+        # print(l, params.grad)
+        # print('  ')
 
         l_sum = l_sum + l
         target_list[i] = y_target[i]
@@ -225,16 +258,17 @@ for epoch in range(n_epoch):
 
     y_list = [tensor.detach().numpy() for tensor in y_list]
 
-    #if epoch % 5 == 0:
-    #    print(f'epoch {epoch + 1}: loss = {l_sum/(n_train-5):.8f}')
-    #    print("acc:", np.sum((np.round(y_list)==target_list))/n_train*100)
-    #    print("prediction:  ", y_list[0:n_train//2], "   ", y_list[n_train//2:])
+    # if epoch % 5 == 0:
+    #     print(f'epoch {epoch + 1}: loss = {l_sum/(n_train-5):.8f}')
+    #     print("acc:", np.sum((np.round(y_list)==target_list))/n_train*100)
+    #     print("prediction:  ", y_list[0:n_train//2], "   ", y_list[n_train//2:])
     #    #print("target:   ", target_list)
     #    #print(params.grad)    
     #exp_lr_scheduler.step()
 
 time_end = time.time()
 
+run.shutdown()
 
 print(' ')
 print(' ')
