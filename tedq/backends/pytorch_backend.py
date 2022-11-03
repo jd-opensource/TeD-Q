@@ -461,16 +461,18 @@ class PyTorchBackend(CompiledCircuit):
         new_size = int(torch.sqrt(prod_shape))
         new_shape = (new_size, new_size)
 
-        ts = ts.view(-1)
-        for i in range(prod_shape):
-            ts[i] = ts[i].conj()
+        # ts = ts.view(-1)
+        # for i in range(prod_shape):
+        #     ts[i] = ts[i].conj()
 
+        # reshape the tensor into a n*n format, so that .T can be used.
         ts = ts.reshape(new_shape)
-        #ts = ts.conj()
         ts = ts.T
+        ts = ts.conj_physical() # Make sure the conjugate information will be reserved while transferring tensor using RPC or storing tensor
+        # reshape the tensor into its original shape
         ts = ts.reshape(shape)
         
-        return ts#.conj().T
+        return ts
 
     @property
     def device(self):
@@ -850,7 +852,7 @@ class PyTorchBackend(CompiledCircuit):
             _p, 
             0.0, 
             0.0, 
-            _p.conj()
+            _p.conj_physical() # Make sure the conjugate information will be reserved while transferring tensor using RPC or storing tensor
         ]  # [[p, 0], [0, p.conjugate()]]
         return_tensor = torch.as_tensor(data, dtype=tcomplex,
             device = cls._device)
