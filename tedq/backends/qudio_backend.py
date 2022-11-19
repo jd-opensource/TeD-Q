@@ -77,7 +77,7 @@ class QUDIOBackend(PyTorchBackend):
         super().__init__(backend, circuit, use_cotengra = use_cotengra, use_jdopttn = use_jdopttn, tn_mode=tn_mode, hyper_opt = hyper_opt, tn_simplify = tn_simplify, **kwargs)
 
         self._torch_model = torch.nn.DataParallel(TorchModel(super().__call__))
-
+        self._torch_model.cuda()
         self._dataset = None
         self._dataloader = None
         self._device = "cuda:0" if torch.cuda.is_available() else "cpu"
