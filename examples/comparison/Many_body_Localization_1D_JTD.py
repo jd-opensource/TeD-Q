@@ -4,6 +4,8 @@ import numpy as np
 import math
 from torch.optim import lr_scheduler
 import sys
+from jdtensorpath.distributed import run_distributed
+
 
 import time
 
@@ -140,11 +142,12 @@ N = (n_size-1)*2
 
 circuit = qai.Circuit(circuitDef, n_qubits, torch.rand(N, device=device), torch.rand(n_qubits+1,2, device=device))
 
-my_compilecircuit = circuit.compilecircuit(backend="pytorch" )
+my_compilecircuit_0 = circuit.compilecircuit(backend="pytorch" )
 
-#slicing_opts = None#{'target_size':2**28, 'repeats':100, 'target_num_slices':1, 'contract_parallel':False}
-#hyper_opt = {'methods':['kahypar'], 'max_time':120, 'max_repeats':128, 'progbar':True, 'minimize':'flops', 'search_parallel':True, 'slicing_opts':slicing_opts}
-#my_compilecircuit = circuit.compilecircuit(backend="pytorch", use_jdopttn=True, hyper_opt = hyper_opt, tn_simplify = False)
+from jdtensorpath import JDOptTN as jdopttn
+slicing_opts = {'target_size':2**28, 'repeats':100, 'target_num_slices':2**2, 'contract_parallel':'distributed_CPU'}#'distributed_CPU'
+hyper_opt = {'methods':['kahypar'], 'max_time':120, 'max_repeats':56, 'progbar':True, 'minimize':'flops', 'search_parallel':True, 'slicing_opts':slicing_opts}
+my_compilecircuit = circuit.compilecircuit(backend="pytorch", use_jdopttn=jdopttn, hyper_opt = hyper_opt, tn_simplify = False)
 
 params = torch.rand(n_qubits+1,2, requires_grad=True, device=device)
 
@@ -163,6 +166,7 @@ import torch.nn as nn
 
 
 
+
 optimizer = torch.optim.Adam([params], lr=0.5)
 
 rnd_sq = np.arange(n_train)
@@ -171,6 +175,56 @@ rnd_sq = np.arange(n_train)
 target_list = [0 for _ in range(n_train)]
 y_list = [0 for _ in range(n_train)]
 
+
+def loss_function_0(_d, params, y_target):
+    
+    loss = nn.BCELoss(reduction='mean')
+    cir_params = torch.cat((params, -params[:,0].view(-1,1)),1)
+    #print(_d)
+    #print(cir_params)
+    y = my_compilecircuit_0(_d, cir_params)
+    #print(y)
+        
+    diff = y[0][1] - 0.6
+    if diff > 0:
+        diff = diff*5./4. + 0.5
+    else:
+        diff = diff*5./6. + 0.5
+        
+    diff = y[0][1]
+        
+    #print(y[0][1], diff, y_target)
+    l = loss(diff, y_target)
+    
+    return (l, diff)
+
+
+
+def loss_function(_d, params, y_target):
+    
+    loss = nn.BCELoss(reduction='mean')
+    cir_params = torch.cat((params, -params[:,0].view(-1,1)),1)
+    #print(_d)
+    #print(cir_params)
+    y = my_compilecircuit(_d, cir_params)
+    #print(y)
+        
+    diff = y[0][1] - 0.6
+    if diff > 0:
+        diff = diff*5./4. + 0.5
+    else:
+        diff = diff*5./6. + 0.5
+        
+    diff = y[0][1]
+        
+    #print(y[0][1], diff, y_target)
+    l = loss(diff, y_target)
+    
+    return (l, diff)
+
+run = run_distributed(4, 0)
+run.set_circuit(loss_function, backward_index=0)
+
 time_start = time.time()
 
 for epoch in range(n_epoch):
@@ -178,80 +232,47 @@ for epoch in range(n_epoch):
     l_sum = 0
     
     for i in rnd_sq:
-        w = y_target[i]*2+1
-        loss = nn.BCELoss(reduction='mean')
-        cir_params = torch.cat((params, -params[:,0].view(-1,1)),1)
-        y = my_compilecircuit(d[i], cir_params)
-        #print(y)
-        
-        diff = y[0][1] - 0.6
-        if diff > 0:
-            diff = diff*5./4. + 0.5
-        else:
-            diff = diff*5./6. + 0.5
-        
-        diff = y[0][1]
-        
-        l = loss(diff, y_target[i])
-        l.backward()
-        #print(params.grad)
-        
+
+        #print('  ')
+        #run.set_circuit(loss_function_0, backward_index=0)
+        #optimizer.zero_grad()
+        (l, y_list[i]) = run(d[i], params, y_target[i])
+        #print(l, params.grad)
+
+
+        # run.set_circuit(loss_function_0, backward_index=0)
+        # optimizer.zero_grad()
+        # (l, y_list[i]) = run(d[i], params, y_target[i])
+        # print(l, params.grad)
+        # print('  ')
+
         l_sum = l_sum + l
         target_list[i] = y_target[i]
-        y_list[i] = diff.data
     
 
-    #if epoch % 5 == 0:
-    #    print(f'epoch {epoch + 1}: loss = {l_sum/(n_train-5):.8f}')
-    #    print("acc:", np.sum((np.round(y_list)==target_list))/n_train*100)
-    #    print("prediction:  ", y_list[0:n_train//2], "   ", y_list[n_train//2:])
-    #    #print("target:   ", target_list)
-    #    #print(params.grad)
         
     params.grad = params.grad/n_train
+    #print(params.grad)
     optimizer.step()
     optimizer.zero_grad()
-    
+
+    y_list = [tensor.detach().numpy() for tensor in y_list]
+
+    # if epoch % 5 == 0:
+    #     print(f'epoch {epoch + 1}: loss = {l_sum/(n_train-5):.8f}')
+    #     print("acc:", np.sum((np.round(y_list)==target_list))/n_train*100)
+    #     print("prediction:  ", y_list[0:n_train//2], "   ", y_list[n_train//2:])
+    #    #print("target:   ", target_list)
+    #    #print(params.grad)    
     #exp_lr_scheduler.step()
 
 time_end = time.time()
 
-d_erg = torch.tensor(np.random.rand(np.int(n_test/2), N)*2-1, device=device)*h_erg*h_bar*t_d*math.pi
-d_local = torch.tensor(np.random.rand(np.int(n_test/2), N)*2-1, device=device)*h_loc*h_bar*t_d*math.pi
-d = torch.cat((d_erg, d_local), 0)
-
-y_target_test = torch.Tensor(np.array([1]*np.int(n_test/2)+[0]*np.int(n_test/2)))
-y_target_test = y_target_test.to(device)
-y_list = [0 for _ in range(n_test)]
-
-l_sum=0
-target_list = [0 for _ in range(n_test)]
-
-for i in range(n_test):
-    cir_params = torch.cat((params, -params[:,0].view(-1,1)),1)
-    y = my_compilecircuit(d[i], cir_params)
-    
-    diff = y[0][1] - 0.6
-    if diff > 0:
-        diff = diff*5./4. + 0.5
-    else:
-        diff = diff*5./6. + 0.5
-        
-    #diff = y[0][1]
-            
-    l = loss(diff, y_target_test[i])
-
-    l_sum = l_sum + l
-    target_list[i] = y_target_test[i]
-    y_list[i] = diff.data
-    
-#print(f'Testing: loss = {l_sum/n_test:.8f}')
-#print("acc:", np.sum((np.round(y_list)==target_list))/n_test*100)
-#print("prediction:  ", list(zip(y_list,target_list)))
+run.shutdown()
 
 print(' ')
 print(' ')
 print('number of qubits: ', n_size)
-print('device: ', u_device)
-print('JDQAI state vector propagation mode time cost for 50 epochs, 40 trains per epoch: ', time_end-time_start, 's')
+print('device: ', 'distributed gpus, 5 nodes, 4 GPU per nodes')
+print('TeD-Q distributed tensor network contraction mode time cost for 50 epochs, 40 trains per epoch: ', time_end-time_start, 's')
 #state vector propagation

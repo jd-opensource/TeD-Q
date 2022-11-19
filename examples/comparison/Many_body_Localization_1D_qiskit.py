@@ -40,7 +40,7 @@ def getIndex(i, j):
     return n_size*i+j
 def Hd(circ, idx, jdx, di):
     #qai.RZ(2*h_bar*di*t_d, qubits=[jdx], trainable_params=[])
-    circ.rx(di, jdx)
+    circ.rz(di, jdx)
     H0(circ, idx, jdx)
     
 def H0(circ, idx, jdx):
@@ -101,9 +101,9 @@ for i in range(n_qubits):
             
 # Trainable theta and phi
 for i in range(n_qubits):
-    qnn_circ.rz(params_list[2*i], i)
+    qnn_circ.ry(params_list[2*i], i)
     qnn_circ.rx(params_list[2*i+1], i)
-    qnn_circ.rz(-params_list[2*i], i)
+    qnn_circ.ry(-params_list[2*i], i)
     
     # H0 dt 
     
@@ -116,9 +116,9 @@ for i in range(n_size):
     
     
 # Last rotation  
-qnn_circ.rz(params_list[2*n_qubits], 0)
+qnn_circ.ry(params_list[2*n_qubits], 0)
 qnn_circ.rx(params_list[2*n_qubits+1], 0)
-qnn_circ.rz(-params_list[2*n_qubits], 0)
+qnn_circ.ry(-params_list[2*n_qubits], 0)
     #RZ
     
 #     qai.measurement.expval(qai.PauliZ(qubits=[0]))
