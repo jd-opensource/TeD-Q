@@ -77,7 +77,7 @@ class QUDIOBackend(PyTorchBackend):
         super().__init__(backend, circuit, use_cotengra = use_cotengra, use_jdopttn = use_jdopttn, tn_mode=tn_mode, hyper_opt = hyper_opt, tn_simplify = tn_simplify, **kwargs)
 
         self._torch_model = torch.nn.DataParallel(TorchModel(super().__call__))
-
+        self._torch_model.cuda()
         self._dataset = None
         self._dataloader = None
         self._device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -86,22 +86,26 @@ class QUDIOBackend(PyTorchBackend):
         '''
         internal call function
         '''
-        print(self._dataset)
+        # print(self._dataset)
+        outputList = torch.tensor([])
         for data in self._dataloader:
             input = data.to(self._device)
             output = self._torch_model(input, *params)
-            print("Outside: input size", input.size(),
-                  "output_size", output.size(), 
-                  "output:", output)
-        return output
+            # print("Outside: input size", input.size(),
+            #       "output_size", output.size(), 
+            #       "output:", output)
+            outputList = torch.cat((outputList, output), 0)
+
+        return outputList
 
 
     def set_dataset(self, dataset):
         device_count = 1 #cpu
         if self._device == "cuda:0":
             device_count = torch.cuda.device_count()
+        print("Device count:", device_count)
         self._dataset = TorchDataset(dataset)
-        self._dataloader = torch.utils.data.DataLoader(dataset=self._dataset, batch_size=device_count, shuffle=True)
+        self._dataloader = torch.utils.data.DataLoader(dataset=self._dataset, batch_size=device_count, shuffle=False)
 
     @property
     def device(self):
@@ -138,8 +142,8 @@ class TorchModel(torch.nn.Module):
         self._fcn = fcn
     def forward(self, x_in, *params):
         x = self._fcn(x_in, *params)
-        print("In Model: input size", x_in.size(),
-          "output size", x.size())
+        # print("In Model: input size", x_in.size(),
+        #   "output size", x.size())
         return x
 
 class TorchExecute(torch.autograd.Function):

@@ -1,18 +1,23 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[7]:
+# In[1]:
 
 
 import sys
-sys.path.append('..')
+sys.path.append('../..')
 import tedq as qai
+
+import pennylane as qml
 
 # Related package
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+
+import gpytorch
+
 
 # Hamiltonian related
 from openfermion.chem import MolecularData
@@ -41,7 +46,7 @@ bond_length_interval = 3.0 / n_points
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-# In[8]:
+# In[2]:
 
 
 import itertools
@@ -55,19 +60,35 @@ CNOTs_space = [[y for y in CNOTs if y is not None] for CNOTs in list(itertools.p
 NAS_search_space = list(itertools.product(Rs_space, CNOTs_space))
 
 
-# In[9]:
+# In[3]:
 
 
 len(NAS_search_space)
 
 
-# In[10]:
+# In[4]:
 
 
 NAS_search_space[3][1]
 
 
-# In[11]:
+# In[5]:
+
+
+def Rot(alpha, beta, theta, qubit):
+    qml.RX(alpha, wires=qubit)
+    qml.RY(beta, wires=qubit)
+    qml.RZ(theta, wires=qubit)
+# Ansatz
+def ansatz(params):
+    for i in range(n_qubits):
+        Rot(params[i][0], params[i][1], params[i][2], i)
+    for j in range(n_qubits-1, -1, -1):
+        for k in range(j+1, n_qubits):
+            qml.CNOT(wires=[j, k])
+
+
+# In[6]:
 
 
 # Hamiltonian
@@ -90,7 +111,7 @@ def get_H2_hamiltonian(distance):
     return jw_hamiltonian.terms, molecule.fci_energy
 
 
-# In[12]:
+# In[7]:
 
 
 AIdList = []
@@ -105,7 +126,7 @@ def ansatz(params, AIdList):
             qai.CNOT(qubits=list(cnot_pair))
 
 
-# In[13]:
+# In[8]:
 
 
 
@@ -138,7 +159,7 @@ def initCircuit(distance, selectedAIdList):
     return fci_energy
 
 
-# In[14]:
+# In[9]:
 
 
 def expert_evaluator(model, subnet, n_experts, cost_fn):
@@ -154,29 +175,71 @@ def expert_evaluator(model, subnet, n_experts, cost_fn):
     return target_expert
 
 
-# In[15]:
+# In[10]:
+
+
+class CircuitSearchModel():
+    def __init__(self, n_qubits=4, n_layers=3, n_experts=5):
+        self.n_qubits = n_qubits
+        self.n_layers = n_layers
+        self.n_experts = n_experts
+        '''init params'''
+        # randomly initialize parameters from a normal distribution
+        self.params_space = np.random.uniform(0, np.pi * 2, (n_experts, n_layers, len(Rs_space), n_qubits))
+        self.params = torch.ones((3,4), requires_grad=True)
+    
+    def get_params(self, subnet, expert_idx):
+        self.subnet = subnet
+        self.expert_idx = expert_idx
+        params = []
+        # print("CNOT", NAS_search_space)
+        # print("get", subnet, expert_idx)
+        for j in range(self.n_layers):
+            r_idx = subnet[j] // len(CNOTs_space)
+            params.append(self.params_space[expert_idx, j, r_idx:r_idx+1])
+#         print("get param", params, np.concatenate(params, axis=0))
+        self.params=torch.tensor(params, requires_grad=True)
+        return np.concatenate(params, axis=0)
+
+    def set_params(self):
+        self.params = self.params.cpu().detach().numpy()
+        for j in range(self.n_layers):
+            r_idx = self.subnet[j] // len(CNOTs_space)
+            # print("set", j, self.subnet[j], r_idx, len(CNOTs_space))
+            # print("set", self.params_space)
+            self.params_space[self.expert_idx, j, r_idx:r_idx+1] = self.params[j, :]
+
+    def __call__(self, params, wires):
+        circuit_search(params, wires=wires,
+                       n_qubits=self.n_qubits,
+                       n_layers=self.n_layers,
+                       arch=self.subnet)
+
+
+# In[11]:
 
 
 import torch.nn as nn
 
 distList = np.arange(0.5,1.0, 0.5)
 energyList = np.array([])
+timeList = np.array([])
 fciEnergyList = np.array([])
-params = torch.ones(12, requires_grad=True)
-# params = torch.rand(12, requires_grad=True)
+modelParam = CircuitSearchModel()
 
-time_start=time.time()    
 timestamp = np.array([])
 error = np.array([])
 
 distance = 1.2
 
-params_space = np.random.uniform(0, np.pi * 2, (n_experts, n_layers, len(Rs_space), n_qubits))
+
+# In[12]:
 
 
-# In[16]:
+step_size = 0.2
 
 
+time_start=time.time()    
 
 
 for i_iter in range(n_search):
@@ -192,62 +255,65 @@ for i_iter in range(n_search):
     if i_iter>100:
         for i in range(n_experts):
             # get params
-            params = []
             min_loss = 100000
             min_expert_id = 0
-            for j in range(n_layers):
-                r_idx = selectedAIdList[j] // len(CNOTs_space)
-                params.append(params_space[i, j, r_idx:r_idx+1])
-            params = torch.tensor(np.concatenate(params, axis=0), requires_grad=True)  
-
+            params = modelParam.get_params(selectedAIdList, i)
+#             print("params",params)
             # calculate
             exp = 0
             for idx, compiledCirc in enumerate(compiledCircList):   
-                exp += compiledCirc(params).real*weightList[idx].real
-    #     print(exp)
+#                 print("compile idx ", idx)
+                exp += compiledCirc(modelParam.params).real*weightList[idx].real
             loss = exp
             if loss<min_loss:
                 min_loss = loss
                 min_expert_id = i
         expert_idx = min_expert_id
     # get params
-    params = []
-    for j in range(n_layers):
-        r_idx = selectedAIdList[j] // len(CNOTs_space)
-        params.append(params_space[expert_idx, j, r_idx:r_idx+1])
-    params = torch.tensor(np.concatenate(params, axis=0), requires_grad=True)  
+    modelParam.get_params(selectedAIdList, expert_idx)
 #     params = torch.zeros((3,4))
-    optimizer = torch.optim.Adam([params], lr=0.9)
+    vNgdOpt = gpytorch.optim.NGD([modelParam.params], num_data=1, lr=0.1)
     
     # for each set
     l_sum = 0
     loss = nn.L1Loss()
     exp = 0
     for idx, compiledCirc in enumerate(compiledCircList):   
-        exp += compiledCirc(params).real*weightList[idx].real
-        pass
-#     print(exp)
+        exp += compiledCirc(modelParam.params).real*weightList[idx].real
+
 
     l = loss(exp, torch.Tensor([-100.]))
     l.backward()        
-    optimizer.step()
-    optimizer.zero_grad()
+#     optimizer.step()
+#     optimizer.zero_grad()
+#     params = opt.step(cost, params)
+#     print("old", modelParam.params)
+    vNgdOpt.step()
+#     print("new", modelParam.params)
+#     print("grad", modelParam.params.grad)
+    vNgdOpt.zero_grad()
 
     # set params
-    params = params.cpu().detach().numpy()
-    for j in range(n_layers):
-        r_idx = selectedAIdList[j] // len(CNOTs_space)
-        params_space[expert_idx, j, r_idx:r_idx+1]= params[j, :]
+    modelParam.set_params()
         
         
 #     print(params)
     print(i_iter, selectedAIdList, fciE, exp.item())
     energyList = np.append(energyList, exp.item())
+    timeList = np.append(timeList, time.time()-time_start)
     fciEnergyList = np.append(fciEnergyList, fciE)
 time_end=time.time()
 
 
-# In[20]:
+# In[ ]:
+
+
+plt.plot(timeList, range(len(timeList)))
+plt.xlabel("time(s)")
+plt.ylabel("epoch size")
+
+
+# In[ ]:
 
 
 result = {}
@@ -265,16 +331,12 @@ for i_iter in range(n_search):
         params = []
         min_loss = 100000
         min_expert_id = 0
-        for j in range(n_layers):
-            r_idx = selectedAIdList[j] // len(CNOTs_space)
-            params.append(params_space[i, j, r_idx:r_idx+1])
-        params = torch.tensor(np.concatenate(params, axis=0), requires_grad=True)  
+        params = modelParam.get_params(selectedAIdList, i)
 
         # calculate
         exp = 0
         for idx, compiledCirc in enumerate(compiledCircList):   
-            exp += compiledCirc(params).real*weightList[idx].real
-#     print(exp)
+            exp += compiledCirc(modelParam.params).real*weightList[idx].real
         loss = exp
         if loss<min_loss:
             min_loss = loss
@@ -282,25 +344,14 @@ for i_iter in range(n_search):
     expert_idx = min_expert_id
     # get params
     params = []
-    for j in range(n_layers):
-        r_idx = selectedAIdList[j] // len(CNOTs_space)
-        params.append(params_space[expert_idx, j, r_idx:r_idx+1])
-    params = torch.tensor(np.concatenate(params, axis=0), requires_grad=False)  
+    params = modelParam.get_params(selectedAIdList, expert_idx) 
     
     # for each set
-    l_sum = 0
-    loss = nn.L1Loss()
     exp = 0
     for idx, compiledCirc in enumerate(compiledCircList):   
-        exp += compiledCirc(params).real*weightList[idx].real
+        exp += compiledCirc(modelParam.params).real*weightList[idx].real
         pass
 
-
-    # set params
-    params = params.cpu().detach().numpy()
-    for j in range(n_layers):
-        r_idx = selectedAIdList[j] // len(CNOTs_space)
-        params_space[expert_idx, j, r_idx:r_idx+1]= params[j, :]
         
         
 #     print(params)
@@ -311,13 +362,13 @@ for i_iter in range(n_search):
 time_end=time.time()
 
 
-# In[18]:
+# In[ ]:
 
 
 print(time.time()-time_start)
 
 
-# In[19]:
+# In[ ]:
 
 
 # result = {}
@@ -329,7 +380,7 @@ print(time.time()-time_start)
 #     weightList = []
 #     fciE = initCircuit(distance, selectedAIdList)
 #     for i in range(n_experts):
-#         print(i)
+# #         print(i)
 #         # get params
 #         params = []
 #         min_loss = 100000
@@ -359,11 +410,11 @@ print(time.time()-time_start)
 sorted_result = list(result.items())
 sorted_result.sort(key=lambda x: x[1], reverse=True)
 for idx, data in enumerate(sorted_result):
-    print(idx, data)
+    print(idx, data[0],data[1].item())
 
 
 # In[ ]:
 
 
-
+np.savez('qas_tedq.npz', t=timeList, e=energyList, r=sorted_result)
 
