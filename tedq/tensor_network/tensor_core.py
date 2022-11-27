@@ -279,6 +279,68 @@ class Tensor():
         return dim
 
 
+    def select_value(self, index, loc):
+        """Select specific values of the index and delete the index. It is like ``M[:,2,:]``.
+        Parameters
+        ----------
+        index : str, index to select specific value and then removed
+        loc : int, the position of the specific value to be selected
+
+        .. code-block:: python3
+
+            import numpy as np
+            data = np.array([[[1., 0.,], [0., 1.]]])
+            indices = ['a', 'b', 'c']
+            size = [1, 2, 2]            
+
+            ts = Tensor(data, indices, size)
+
+        >>> ts.data
+        array([[[1., 0.],
+                [0., 1.]]])
+
+        >>> ts.indices
+        ['a', 'b', 'c']
+
+        >>> ts.size
+
+        Examples
+        --------
+        .. code-block:: python3
+            import numpy as np
+            data = np.array([[0., 0.,], [1., 2.]])
+            indices = ['a', 'b']
+            size = [2, 2]
+            ts = Tensor(data, indices, size)
+
+            ts.select_value('a', 1)
+
+        >>> ts.data
+        array([1.,2.])
+
+        >>> ts.indices
+        ['b']
+
+        >>> ts.size
+        [2]
+
+
+        See Also
+        --------
+        TensorNetwork.select_value
+        """
+
+        loc_dict = {index:loc}
+        element_selector = tuple(loc_dict.get(ix, slice(None)) for ix in self.indices)
+        self._data = self.data[element_selector]
+
+        #print(self.indices, self.indices[0])
+        self._indices = [ix for ix in self.indices if ix != index]
+        #print(self.indices, index)
+        self._size = list(self._data.shape)
+
+        return element_selector
+
 
     @property
     def data(self):

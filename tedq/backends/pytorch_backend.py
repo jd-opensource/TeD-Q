@@ -260,6 +260,10 @@ class PyTorchBackend(CompiledCircuit):
 
                     arrays.extend(self._adjointoperands)
                     arrays.extend(zero_state)
+
+                    if self._tn_simplify:
+                        arrays = self._tensor_networks[i].simplify_arrays(arrays)
+
                     result = self._optimize_order_trees[i].contract(arrays, prefer_einsum = True, backend='torch')
                     result = torch.squeeze(result.real)
                     results.append(result)
@@ -267,12 +271,19 @@ class PyTorchBackend(CompiledCircuit):
                 if self.measurements[i].return_type is Probability:
                     arrays.extend(self._adjointoperands)
                     arrays.extend(zero_state)
+
+                    if self._tn_simplify:
+                        arrays = self._tensor_networks[i].simplify_arrays(arrays)
+
                     result = self._optimize_order_trees[i].contract(arrays, prefer_einsum = True, backend='torch')
                     result = torch.squeeze(result.real)
                     results.append(result)
 
                 if self.measurements[i].return_type is State:
                     #arrays.extend(zero_state)
+                    if self._tn_simplify:
+                        arrays = self._tensor_networks[i].simplify_arrays(arrays)
+                        
                     result = self._optimize_order_trees[i].contract(arrays, prefer_einsum = True, backend='torch')
                     results.append(result)
 

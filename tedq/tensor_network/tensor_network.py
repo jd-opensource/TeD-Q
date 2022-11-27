@@ -29,7 +29,7 @@ import itertools
 
 from tedq.QInterpreter.operators.measurement import Expectation, Probability, State
 from .tensor_core import Tensor
-from .array_ops import get_diag_axes, get_antidiag_axes
+from .array_ops import get_diag_axes, get_antidiag_axes, get_columns
 
 _EINSUM_SYMBOLS_BASE = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
@@ -92,26 +92,47 @@ class TensorNetwork():
         simplify this tensor network
         '''
         print("Wrong! not ready!!! change tn_simplify to False")
-        print("Number of tensors BEFORE simplification: ", len(self.tensors))
-        self.squeeze()
-        self.elliminate_scalar()
-        self.fuse_multi_edges(self._output_indices)
-        #print("wtf")
-        self.diagonal_reduce(self._output_indices)
-        self.antidiagonal_reduce(self._output_indices)
-        self.weighted_rank_simplify(self._output_indices)
+
+        num_ts = len(self.tensors)
+        num_ids = len(self.size_dict)
+
+        old_num_ts = None
+        old_num_ids = None
+
+        print("Number of tensors BEFORE simplification: ", num_ts)
+        print("Number of indices BEFORE simplification: ", num_ids)
+
+        while (num_ts, num_ids) != (old_num_ts, old_num_ids):
+
+            print(num_ts, num_ids)
+
+            self.squeeze()
+            self.elliminate_scalar()
+            self.fuse_multi_edges(self._output_indices)
+            #print("wtf")
+            self.diagonal_reduce(self._output_indices)
+            self.antidiagonal_reduce(self._output_indices)
+            self.weighted_rank_simplify(self._output_indices)
+            self.column_reduce(self._output_indices)
+
+            old_num_ts = num_ts
+            old_num_ids = num_ids
+
+            num_ts = len(self.tensors)
+            num_ids = len(self.size_dict)
         
         #print(self.operands)
 
         self.update_tn()
 
-        print("Number of tensors AFTER simplification: ", len(self.tensors))
+        print("Number of tensors AFTER simplification: ", num_ts)
+        print("Number of indices AFTER simplification: ", num_ids)
 
     def simplify_arrays(self, arrays):
         r'''
         According to the tensor network simplification, simplified the input arrays.
         '''
-        print("Wrong! not ready!!! change tn_simplify to False")
+        #print("Wrong! not ready!!! change tn_simplify to False")
         for operand in self.operands:
             if len(operand) == 2:
                 (do_action, order_operand) = operand
@@ -159,6 +180,13 @@ class TensorNetwork():
                     dim = action_params
                     array = arrays[i]
                     array = torch.sum(array, dim)
+                    arrays[i] = array
+
+                elif do_action == 'select_value':
+                    i = order_operand
+                    selector = action_params
+                    array = arrays[i]
+                    array = array[selector]
                     arrays[i] = array
 
                 else:
@@ -391,7 +419,7 @@ class TensorNetwork():
             t_ids = queue.pop()
             t = self._map_tensor[t_ids]
 
-            cache_key = ('dr', t_ids, id(t.data))
+            cache_key = ('ar', t_ids, id(t.data))
             if cache_key in cache:
                 continue
 
@@ -446,7 +474,7 @@ class TensorNetwork():
         --------
         squeeze fuse_multi_edges
         """
-
+        # ctest = 0
         # repeated index checking
         for t in self.tensors:
             self.collapse_repeated_indice(t)
@@ -469,7 +497,10 @@ class TensorNetwork():
         counts.update(output_inds)
 
 
-        queue = set(self._map_index)
+        # introduce random order, so that for the same circuit, each time will give different simplification result
+        #queue = list(set(self._map_index))
+        # fix the order, so that for the same circuit, simplification result is always the same
+        queue = list(self._map_index)
         while queue:
             index = queue.pop()
             try:
@@ -495,11 +526,14 @@ class TensorNetwork():
             num_combi = 0
 
             for tid_a, tid_b in itertools.combinations(t_ids_set, 2):
+                # if ctest==0:
+                #     ctest+=1
+                #     print(tid_a, tid_b)
 
                 ta = self._map_tensor[tid_a]
                 tb = self._map_tensor[tid_b]
 
-                cache_key = ('rs', tid_a, tid_b, id(ta.data), id(tb.data))
+                cache_key = ('ws', tid_a, tid_b, id(ta.data), id(tb.data))
                 if cache_key in cache:
                     continue
 
@@ -512,7 +546,7 @@ class TensorNetwork():
                 in_fre = toolz.frequencies(input_indices) # dict of input indices and frequencies
 
                 output_indices = []
-                # count of index need to be - 1; A_ab B_ac ->C_abc, count of a reduce by 1
+                # count of index need to be - 1; A_ab B_ac ->C_abc, count of 'a' reduce by 1
                 de_count = []
                 for index, c in in_fre.items():
                     if c != counts[index]:
@@ -576,6 +610,7 @@ class TensorNetwork():
                 # ATTENTION!!! position j must be found after tensor_i has been pop!!
                 # Since pop(i) will delete tensor_i and then affect position of j!!!
                 # delete old tensors
+                #print(self.tensors, ta)
                 i = self.tensors.index(ta)
                 self._tensors.pop(i)
 
@@ -587,13 +622,13 @@ class TensorNetwork():
 
                 # check outputs indices again
                 for index in output_indices:
-                    queue.add(index)
+                    queue.append(index)
 
                 operand = ('einsum', i, j, einsum_str)
                 self._operands.append(operand)
 
-                # update the tensor network
-                self.mapping_tensors()
+                self.mapping_tensors() # tensors have been changed, re-map them.
+                # update the indices
                 self.mapping_indices()
 
 
@@ -607,11 +642,64 @@ class TensorNetwork():
 
         # elliminate scalar tensors produced this simplification
         self.elliminate_scalar()
-        self.update_tn()
 
 
 
-  
+    def column_reduce(
+        self,
+        output_inds,
+        atol=1e-12,
+    ):
+        """Cutting the edges that have tensors where all but the one respective index column is non-zero.
+
+        Parameters
+        ----------
+        output_inds : list(str), Outer indices of the tensor network and thus not change. 
+        atol : float, optional, The absolute tolerance compared to zero when identifying diagonal tensors.
+            which to compare to zero with.
+        See Also
+        --------
+        squeeze fuse_multi_edges
+        """
+
+
+        cache = set()
+
+        queue = list(self._map_tensor)
+        while queue:
+
+            t_ids = queue.pop()
+            t = self._map_tensor[t_ids]
+
+            cache_key = ('cr', t_ids, id(t.data))
+            if cache_key in cache:
+                continue
+
+            dim_j = get_columns(t.data, atol=atol)
+
+            # no column founded
+            if dim_j is None:
+                cache.add(cache_key)
+                continue
+
+            dim, j = dim_j
+            inds = t.indices[dim]
+
+            # Do not modify the output shape
+            if inds in output_inds:
+                continue
+
+            #print(t.data)
+
+            self.select_value(inds, j)
+
+            self.mapping_indices()
+
+            #print("cyc", len(queue), dim_j, t.data)
+            # this tensor might still has other singlet column
+            queue.append(t_ids)
+
+        self.elliminate_scalar()  
 
 
     def flip(self, flip_inds):
@@ -657,6 +745,30 @@ class TensorNetwork():
             operand = ('einsum', i, einsum_str)
             self._operands.append(operand)
 
+    def select_value(self, index, loc):
+        """Select fix values for the index, and remove this index from this tensor network
+
+        Parameters
+        ----------
+        index : str, index to select specific value and then removed
+        loc : int, the position of the specific value to be selected
+
+
+        See Also
+        --------
+        Tensor.isel
+        """
+
+        t_ids_set = self._map_index[index]
+        #print(index, t_ids_set)
+        for tid in t_ids_set:
+            t = self._map_tensor[tid]
+            #print("wyn", t.data, t.indices)
+            selector = t.select_value(index, loc)
+
+            i = self.tensors.index(t)
+            operand = ('select_value', i, selector)
+            self._operands.append(operand)
 
 
     def update_tn(self):

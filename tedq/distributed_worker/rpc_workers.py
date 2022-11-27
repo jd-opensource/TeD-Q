@@ -30,7 +30,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--master_port",
         type=str,
-        default="5678",#8119
+        default="8119",#8119
         help="""Port that master is listening on, will default to 29500 if not
         provided. Master must be able to accept network traffic on the host and port.""")
 
@@ -38,7 +38,10 @@ if __name__ == '__main__':
     assert args.world_size is not None, "must provide world_size argument."
     assert args.rank is not None, "must provide rank argument."
     os.environ['MASTER_ADDR'] = args.master_addr
-    os.environ["MASTER_PORT"] = args.master_port
+    os.environ['MASTER_PORT'] = args.master_port
+    os.environ['world_size'] = str(args.world_size)
+    os.environ['num_gpus'] = str(args.num_gpus)
+    os.environ['rank'] = str(args.rank)
     world_size = args.world_size
     rank = args.rank
     num_gpus = args.num_gpus
