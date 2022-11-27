@@ -238,7 +238,7 @@ print(len(y),len(y_target))
 print(y_target)
 
 
-# In[16]:
+# In[ ]:
 
 
 
@@ -286,7 +286,7 @@ for epoch in range(n_epoch):
 
 # ### Test the trained circuit
 
-# In[17]:
+# In[ ]:
 
 
 d_erg = torch.tensor(np.random.rand(np.int(n_test/2), N)*2-1)*h_erg*h_bar*t_d*math.pi
