@@ -47,6 +47,11 @@ class CompiledCircuit:
     # pylint: disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
     def __init__(self, backend, circuit, use_cotengra=False, use_jdopttn=False, tn_mode=False, hyper_opt=None, tn_simplify=False, print_output=False):
 
+
+        # single CPU or GPU mode for state vector propagation mode and tensor network contraction mode
+        # only jdopttn has advance mode
+        self._calculation_mode = False
+
         self._use_cotengra = use_cotengra
         self._use_jdopttn = use_jdopttn
 
@@ -365,6 +370,10 @@ class CompiledCircuit:
                 search_parallel = hyper_opt.get('search_parallel', True)
                 slicing_opts = hyper_opt.get('slicing_opts', None)
 
+                if slicing_opts:
+                    self._calculation_mode = slicing_opts.get('contract_parallel', False)
+
+
                 #print("compiled_circuit's search_parallel:   ", search_parallel)
 
                 #from tedq.JD_opt_tn import JDOptTN  # pylint: disable=import-outside-toplevel
@@ -621,6 +630,13 @@ class CompiledCircuit:
         return the measurements
         """
         return self._measurements
+
+    @property
+    def calculation_mode(self):
+        """
+        return the calculation_mode
+        """
+        return self._calculation_mode
 
     def complex_conjugate(self, ts):
         '''

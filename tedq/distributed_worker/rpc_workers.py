@@ -5,7 +5,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description="Parameter-Server RPC based training")
     parser.add_argument(
-        "--world_size",
+        "--num_nodes",
         type=int,
         default=None,
         help="""Total number of participating processes. Should be the sum of
@@ -16,9 +16,15 @@ if __name__ == '__main__':
         default=None,
         help="Global rank of this process. Pass in 0 for master.")
     parser.add_argument(
-        "--num_gpus",
+        "--gpus_per_cpu",
         type=int,
         default=0,
+        help="""Number of GPUs to use for training, Currently supports between 0
+         and 2 GPUs. Note that this argument will be passed to the parameter servers.""")
+    parser.add_argument(
+        "--cpus_per_node",
+        type=int,
+        default=1,
         help="""Number of GPUs to use for training, Currently supports between 0
          and 2 GPUs. Note that this argument will be passed to the parameter servers.""")
     parser.add_argument(
@@ -35,19 +41,19 @@ if __name__ == '__main__':
         provided. Master must be able to accept network traffic on the host and port.""")
 
     args = parser.parse_args()
-    assert args.world_size is not None, "must provide world_size argument."
+    assert args.num_nodes is not None, "must provide num_nodes argument."
     assert args.rank is not None, "must provide rank argument."
-    os.environ['MASTER_ADDR'] = args.master_addr
-    os.environ['MASTER_PORT'] = args.master_port
-    os.environ['world_size'] = str(args.world_size)
-    os.environ['num_gpus'] = str(args.num_gpus)
-    os.environ['rank'] = str(args.rank)
-    world_size = args.world_size
+
+    num_nodes = int(args.num_nodes)
     rank = args.rank
-    num_gpus = args.num_gpus
+    gpus_per_cpu = args.gpus_per_cpu
+    cpus_per_node = args.cpus_per_node
     master_addr = args.master_addr
     master_port = args.master_port
 
+
     from jdtensorpath.distributed import run_distributed
-    run = run_distributed(world_size, rank, num_gpus, master_addr, master_port)
+
+    # num_nodes, rank=0, gpus_per_cpu=0, cpus_per_node=1, master_addr='localhost', master_port='8119'
+    run = run_distributed(num_nodes, rank, gpus_per_cpu, cpus_per_node, master_addr, master_port)
     run.shutdown()
