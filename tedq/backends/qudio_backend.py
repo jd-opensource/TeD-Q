@@ -76,7 +76,8 @@ class QUDIOBackend(PyTorchBackend):
         
         super().__init__(backend, circuit, use_cotengra = use_cotengra, use_jdopttn = use_jdopttn, tn_mode=tn_mode, hyper_opt = hyper_opt, tn_simplify = tn_simplify, **kwargs)
 
-        self._torch_model = torch.nn.DataParallel(TorchModel(super().__call__))
+        self._torch_model = TorchModel(super().__call__)
+        self._torch_model_dp = torch.nn.DataParallel(self._torch_model)
         self._torch_model.cuda()
         self._dataset = None
         self._dataloader = None
@@ -88,9 +89,11 @@ class QUDIOBackend(PyTorchBackend):
         '''
         # print(self._dataset)
         outputList = torch.tensor([])
+        self._torch_model.setParams(*params)
         for data in self._dataloader:
-            input = data.to(self._device)
-            output = self._torch_model(input, *params)
+            x = data.to(self._device)
+            output = self._torch_model_dp(x)
+            # circuit want (x, params, y)
             # print("Outside: input size", input.size(),
             #       "output_size", output.size(), 
             #       "output:", output)
@@ -140,8 +143,11 @@ class TorchModel(torch.nn.Module):
     def __init__(self, fcn):
         super().__init__()
         self._fcn = fcn
-    def forward(self, x_in, *params):
-        x = self._fcn(x_in, *params)
+        self.params = None
+    def setParams(self, params):
+        self.params = params
+    def forward(self, x_in):
+        x = self._fcn(x_in, self.params)
         # print("In Model: input size", x_in.size(),
         #   "output size", x.size())
         return x
