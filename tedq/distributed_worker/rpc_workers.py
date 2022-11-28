@@ -45,7 +45,7 @@ if __name__ == '__main__':
     assert args.rank is not None, "must provide rank argument."
 
     num_nodes = int(args.num_nodes)
-    rank = args.rank
+    rank=int(os.environ['SLURM_PROCID']) + 1 # rank = args.rank
     gpus_per_cpu = args.gpus_per_cpu
     cpus_per_node = args.cpus_per_node
     master_addr = args.master_addr
