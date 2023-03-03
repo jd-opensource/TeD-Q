@@ -31,6 +31,7 @@ from copy import deepcopy
 import torch
 from torch import tensor
 from tedq.QInterpreter.operators.measurement import Expectation, Probability, State
+from tedq.tools import dec_to_bin, rescale_state
 from .compiled_circuit import CompiledCircuit
 
 
@@ -249,14 +250,22 @@ class PyTorchBackend(CompiledCircuit):
 
                 if self.measurements[i].return_type is Expectation:
 
+                    # can not measure hermitian (user defined Unitary)
+                    # Error will pop up since there's no get_Unitary_tensor function
                     # multiple qubits expectation value measurement.
                     if isinstance(self.measurements[i].obs, list):
                         for ob in self.measurements[i].obs:
                             arrays.append(self._tensor_of_gate(ob.name, []))
 
+                    # can measure hermitian (user defined Unitary) with arbitary number of qubits
+                    # Get matrix, use _matrix_to_tensor instead of _tensor_of_gate because of user defined Unitary observable
                     # single qubit expectation value measurement.
                     else:
-                        arrays.append(self._tensor_of_gate(self.measurements[i].obs.name, []))
+                        matrix = self.measurements[i].obs.matrix
+                        num_qubits = len(self.measurements[i].obs.qubits)
+                        ts = self._matrix_to_tensor(matrix, num_qubits)
+                        arrays.append(ts)
+                        #arrays.append(self._tensor_of_gate(self.measurements[i].obs.name, []))
 
                     arrays.extend(self._adjointoperands)
                     arrays.extend(zero_state)
@@ -306,14 +315,22 @@ class PyTorchBackend(CompiledCircuit):
 
                 if self.measurements[i].return_type is Expectation:
 
+                    # can not measure hermitian (user defined Unitary)
+                    # Error will pop up since there's no get_Unitary_tensor function
                     # multiple qubits expectation value measurement.
                     if isinstance(self.measurements[i].obs, list):
                         for ob in self.measurements[i].obs:
                             arrays.append(self._tensor_of_gate(ob.name, []))
 
+                    # can measure hermitian (user defined Unitary) with arbitary number of qubits
+                    # Get matrix, use _matrix_to_tensor instead of _tensor_of_gate because of user defined Unitary observable
                     # single qubit expectation value measurement.
                     else:
-                        arrays.append(self._tensor_of_gate(self.measurements[i].obs.name, []))
+                        matrix = self.measurements[i].obs.matrix
+                        num_qubits = len(self.measurements[i].obs.qubits)
+                        ts = self._matrix_to_tensor(matrix, num_qubits)
+                        arrays.append(ts)
+                        #arrays.append(self._tensor_of_gate(self.measurements[i].obs.name, []))
                         
                     arrays.extend(self._adjointoperands)
                     arrays.extend(zero_state)
@@ -390,6 +407,8 @@ class PyTorchBackend(CompiledCircuit):
                             + [0]
                             + list(range(ob.qubits[0] + 1, self._num_qubits))
                         )
+                        # can not measure hermitian (user defined Unitary)
+                        # Error will pop up since there's no get_Unitary_tensor function
                         tmpt = self._tensor_of_gate(ob.name, [])
                         meas_state = torch.tensordot(
                             tmpt, meas_state, dims=([1], ob.qubits)
@@ -402,17 +421,33 @@ class PyTorchBackend(CompiledCircuit):
                     result = torch.squeeze(result.real)
                     results.append(result)
 
+                # can measure hermitian (user defined Unitary) with arbitary number of qubits
                 # single qubit expectation value measurement.
                 else:
-                    perms = (
-                        list(range(1, meas.obs.qubits[0] + 1))
-                        + [0]
-                        + list(range(meas.obs.qubits[0] + 1, self._num_qubits))
-                    )
-                    tmpt = self._tensor_of_gate(meas.obs.name, [])
+                    perms = []
+                    qbts = meas.obs.qubits
+                    len_qbts = len(qbts)
+                    
+                    gate_pos = list(range(len_qbts, 2*len_qbts))
+                    res_right = list(range(self._num_qubits))
+                    res_right = [x for x in res_right if x not in qbts]
+                    dot_result = qbts + res_right
+                    for i in range(self._num_qubits):
+                        perms.append(dot_result.index(i))
+
+                    state_pos = qbts
+                    dims_axes = (gate_pos, state_pos)
+
+                    # Get matrix, use _matrix_to_tensor instead of _tensor_of_gate because of user defined Unitary observable
+                    matrix = meas.obs.matrix
+                    num_qubits = len_qbts
+                    ts = self._matrix_to_tensor(matrix, num_qubits)
+
+                    tmpt = ts
                     tmpt = torch.tensordot(
-                        tmpt, state, dims=([1], meas.obs.qubits)
-                    )  # order need to change!
+                        tmpt, state, dims=dims_axes
+                    )  
+                    # order need to change!
                     tmpt = tmpt.permute(perms)
                     axes = list(range(self._num_qubits))
                     tmpt = torch.tensordot(torch.conj(state), tmpt, dims=(axes, axes))
@@ -431,6 +466,26 @@ class PyTorchBackend(CompiledCircuit):
                     else:
                         result = probs_tensor
                     results.append(result)
+
+                    state_after_measures = []
+                    meas_states = []
+                    len_meas_qubits = len(meas.qubits)
+                    size = 2**len_meas_qubits
+                    for i in range(size):
+                        meas_state = dec_to_bin(i, size)
+                        loc_dict = dict(zip(meas.qubits, meas_state))
+                        element_selector = tuple(loc_dict.get(ix, slice(None)) for ix in range(self._num_qubits))
+                        tmpt = state[element_selector]
+
+                        # not change data in state vector
+                        state_after_measure = tmpt
+                        #print(state_after_measure)
+
+                        state_after_measure = rescale_state(state_after_measure)
+                        state_after_measures.append(state_after_measure)
+                        meas_states.append(''.join([str(s) for s in meas_state]))
+
+                    self._states_after_measurement = dict(zip(meas_states, state_after_measures))
 
             if meas.return_type is State:
                 results.append(state)
@@ -491,6 +546,13 @@ class PyTorchBackend(CompiledCircuit):
         return the device used for calculation, GPU or CPU
         '''
         return self._device
+
+    @property
+    def states_after_measurement(self):
+        try:
+            return self._states_after_measurement
+        except:
+            raise ValueError(f'no states after measurement found! please measure probs with qubits.')
 
     @classmethod
     def update_device(cls, device):

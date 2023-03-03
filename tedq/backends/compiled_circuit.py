@@ -183,7 +183,15 @@ class CompiledCircuit:
                 flops += vector_lenght*(2*16-1)
 
             else:
-                raise QuantumValueError("Error on __init__ of Compiled_Circuit, unknown gate with num_qubits larger than 4")
+                gate_pos = range(len_qbts, 2*len_qbts)
+                res_right = list(range(self._num_qubits))
+                res_right = [x for x in res_right if x not in qbts]
+                dot_result = qbts + res_right
+                for i in range(self._num_qubits):
+                    perms.append(dot_result.index(i))
+
+                flops += vector_lenght*(2*(2**len_qbts)-1)
+                #raise QuantumValueError("Error on __init__ of Compiled_Circuit, unknown gate with num_qubits larger than 4")
             
             state_pos = qbts
             self._axeslist.append((gate_pos, state_pos))

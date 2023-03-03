@@ -899,7 +899,26 @@ def gen_tensor_networks(num_qubits, operators, appliedqubits, measurements):
             _layer_ids[qbts[1]] = _current_ids - 1
             _layer_ids[qbts[2]] = _current_ids
 
+
+        # This is for any num of qubits operator gate
         else:
+
+            _current_ids = _current_ids + len_qbts
+
+            tmpt_input_indices=[]
+            for i in reverse(range(len_qbts)):
+                tmpt_input_indices.append(get_symbol(_current_ids - i))
+            for i in range(len_qbts):
+                tmpt_input_indices.append(get_symbol(_layer_ids[qbts[i]]))                
+
+            _input_indices.append(
+                tmpt_input_indices
+                )
+
+            for i in range(len_qbts):
+                _layer_ids[qbts[i]] = _current_ids - (len_qbts - 1 - i)
+
+
             if len_qbts == 12:
                 _egg = []
                 for cc in range(len_qbts):
@@ -907,7 +926,7 @@ def gen_tensor_networks(num_qubits, operators, appliedqubits, measurements):
                     _egg.append(_symbol)
                 _s_egg = ''.join(_egg)
                 raise ValueError(f'{_s_egg} remind you, please change tn_simplify value!')
-            raise ValueError("Error!! unknown operator with len of applied qubits larger than 3!")
+            #raise ValueError("Error!! unknown operator with len of applied qubits larger than 3!")
 
         operator = operators[idx]
         matrix = operator.matrix
@@ -939,6 +958,30 @@ def gen_tensor_networks(num_qubits, operators, appliedqubits, measurements):
 
             if measurement.return_type is Expectation:
 
+                # # multiple qubits expectation value measurement.
+                # if isinstance(measurement.obs, list):
+                #     for ob in measurement.obs:
+                #         if len(ob.qubits) > 1:
+                #             raise ValueError(f'Currently, TeD-Q only support 1 qubit observable in TN mode!')
+                #         _current_ids_i = _current_ids_i + 1
+                #         layer = ob.qubits[0]
+                #         _input_indices_i.append(
+                #             [get_symbol(_current_ids_i), get_symbol(_layer_ids_i[layer])])
+                #         _layer_ids_i[layer] = _current_ids_i
+                #         _input_arrays_i.append(ob.matrix)
+
+                # # single qubit expectation value measurement.
+                # else:
+                #     _current_ids_i = _current_ids_i + 1
+                #     if len(measurement.obs.qubits) > 1:
+                #         raise ValueError(f'Currently, TeD-Q only support 1 qubit observable in TN mode!')
+                #     layer = measurement.obs.qubits[0]
+                #     _input_indices_i.append(
+                #         [get_symbol(_current_ids_i), get_symbol(_layer_ids_i[layer])])
+                #     _layer_ids_i[layer] = _current_ids_i
+                #     _input_arrays_i.append(measurement.obs.matrix)
+
+
                 # multiple qubits expectation value measurement.
                 if isinstance(measurement.obs, list):
                     for ob in measurement.obs:
@@ -951,11 +994,24 @@ def gen_tensor_networks(num_qubits, operators, appliedqubits, measurements):
 
                 # single qubit expectation value measurement.
                 else:
-                    _current_ids_i = _current_ids_i + 1
-                    layer = measurement.obs.qubits[0]
+
+                    qbts = measurement.obs.qubits
+                    len_qbts = len(qbts)
+                    _current_ids_i = _current_ids_i + len_qbts
+                    tmpt_input_indices=[]
+                    for i in reverse(range(len_qbts)):
+                        tmpt_input_indices.append(get_symbol(_current_ids_i - i))
+                    for i in range(len_qbts):
+                        tmpt_input_indices.append(get_symbol(_layer_ids_i[qbts[i]]))
+
                     _input_indices_i.append(
-                        [get_symbol(_current_ids_i), get_symbol(_layer_ids_i[layer])])
-                    _layer_ids_i[layer] = _current_ids_i
+                        tmpt_input_indices
+                        )
+
+                    for i in range(len_qbts):
+                        _layer_ids_i[qbts[i]] = _current_ids_i - (len_qbts - 1 - i)
+
+                    # TODO: need to reshape??
                     _input_arrays_i.append(measurement.obs.matrix)
 
             if measurement.return_type is Probability:

@@ -1605,14 +1605,14 @@ class CRZ(GateBase):
         return CRZ(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
 
 # TODO: add checking is it really a unitary matrix, see pennylane code
-class Unitary(GateBase):
+class Unitary(GateBase, ObservableBase):
     r"""Unitary(qubits)
     Unitary gate operator.
     The matrix form is:
 
 
     **Properties**
-        * # of qubits: 1~4
+        * # of qubits: 1~
         * # of parameters: 0
 
     Args:
@@ -1652,6 +1652,27 @@ class Unitary(GateBase):
         ccj_matrix = complex_conjugate(ccj_matrix)
 
         return Unitary(ccj_matrix, qubits=self.qubits, do_queue=do_queue)
+
+
+    def diagonalizing_gates(self, do_queue=False):
+        r"""Return list of unitary operators that can diagonalize this gate.
+        It can be used to rotate the specified qubits so that let the state
+        in the eigenbasis of the Hadamard operator.
+
+        For the Pauli-X operator,
+
+        .. math:: X = U^\dagger X U
+
+        where :math:`U = H`.
+
+        .. math:: \langle \mathbf{\alpha} \vert X \vert \mathbf{\beta} \rangle = 
+                  \langle \mathbf{\alpha} \vert U U^\dagger X U U^\dagger \vert \mathbf{\beta} \rangle
+
+        Returns:
+            list(~.GateBase): A list of operators that diagonalize Hadamard in
+            the computational basis.
+        """
+        raise ValueError(f'User defined Unitary doesnot have diagonalizing_gates function!!')
 
 
 def complex_conjugate(ts):

@@ -21,21 +21,27 @@ Real IBMQ quantum computer backend.
 
 from collections import OrderedDict
 import math
-import qiskit
-from qiskit import QuantumCircuit, transpile, IBMQ
-from qiskit.circuit import Parameter
+
 import torch
 import numpy as np
 
 from tedq.QInterpreter.operators.measurement import Expectation, Probability, State
 
+import qiskit
+from qiskit import transpile, IBMQ
+from qiskit import QuantumCircuit as qiskit_QuantumCircuit
+from qiskit.circuit import Parameter
+
+from quafu import User
+from quafu import QuantumCircuit as quafu_QuantumCircuit
+import numpy as np
 
 # Caution! now all the parameters must be trainable!!
 
 # pylint: disable=too-many-public-methods
 class HardwareBackend():
     r'''
-    Class for Real IBMQ quantum computer backend.
+    Class for Real hardware quantum computer backend.
 
     Args:
         backend (string): Name of the computation backend -- ``jax`` or ``pytorch``
@@ -44,8 +50,9 @@ class HardwareBackend():
     '''
 
     # pylint: disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
-    def __init__(self, backend, circuit):
+    def __init__(self, backend, circuit, num_shots = 2000):
 
+        self._num_shots = num_shots
         self._device = None
         self._num_qubits = circuit.num_qubits
         self._backend = backend
@@ -64,6 +71,13 @@ class HardwareBackend():
             self._appliedqubits[operator.instance_id] = operator.qubits
             self._operatorparams[operator.instance_id] = operator.parameters
             self._trainableparams[operator.instance_id] = operator.trainable_params
+
+        for operator in circuit.operators:
+            parameters_length = len(operator.parameters)
+            trainable_parameters_length = len(operator.trainable_params)
+            if parameters_length != trainable_parameters_length:
+                raise ValueError("In hardware backend, all the parameters in quantum circuit must be trainable parameters!")
+
         self._measurements = circuit.measurements
 
         #if self._num_qubits != 1:
@@ -72,67 +86,9 @@ class HardwareBackend():
         #if not self._measurements[0].obs.name == "PauliZ":
         #    raise ValueError("Currently hardware only support 1 qubit PauliZ measurement!")
 
-        self._gate_to_qiskit = {
-            "I": self.get_I_qiskit,
-            "Hadamard": self.get_Hadamard_qiskit,
-            "PauliX": self.get_PauliX_qiskit,
-            "PauliY": self.get_PauliY_qiskit,
-            "PauliZ": self.get_PauliZ_qiskit,
-            "S": self.get_S_qiskit,
-            "T": self.get_T_qiskit,
-            "SX": self.get_SX_qiskit,
-            "CNOT": self.get_CNOT_qiskit,
-            "CZ": self.get_CZ_qiskit,
-            "CY": self.get_CY_qiskit,
-            "SWAP": self.get_SWAP_qiskit,
-            "CSWAP": self.get_CSWAP_qiskit,
-            "Toffoli": self.get_Toffoli_qiskit,
-            "RX": self.get_RX_qiskit,
-            "RY": self.get_RY_qiskit,
-            "RZ": self.get_RZ_qiskit,
-            "Rot": self.get_Rot_qiskit,
-            "PhaseShift": self.get_PhaseShift_qiskit,
-            "ControlledPhaseShift": self.get_ControlledPhaseShift_qiskit,
-            "CRX": self.get_CRX_qiskit,
-            "CRY": self.get_CRY_qiskit,
-            "CRZ": self.get_CRZ_qiskit,
-        }
-
-        self._qc = QuantumCircuit(self._num_qubits, 0)
-        self._params_count = 0
-        self._quantum_parameters = []
-
-        for operator in circuit.operators:
-            name = operator.name
-            qubits = operator.qubits
-            self._gate_to_qiskit[name](qubits)
 
         # TODO: need to make sure each qubit only has one measurement! probs measurement measure selected qubits or all qubits
 
-        rotations = []
-        for measurement in self._measurements:
-            if measurement.return_type is Expectation:
-                rotations.extend(measurement.obs.diagonalizing_gates())
-
-            elif measurement.return_type is Probability:
-                pass
-
-            else:
-                raise ValueError(f'hardware backend do not support {measurement.return_type} measurement!')
-
-        for operator in rotations:
-            name = operator.name
-            qubits = operator.qubits
-            self._gate_to_qiskit[name](qubits)
-
-        self._qc.measure_all()
-
-        provider = IBMQ.get_provider('ibm-q')
-        #self._backend = provider.get_backend('ibmq_qasm_simulator')
-        self._backend = provider.get_backend('ibmq_belem')
-
-        #from qiskit import Aer, transpile
-        #self._backend = Aer.get_backend("aer_simulator_statevector")
 
 
     def param_shift_execute(self, *params):
@@ -222,36 +178,7 @@ class HardwareBackend():
     def real_execute(self, *params):
         r'''
         '''
-        params_bind = dict()
-        for i, p_name in enumerate(self._quantum_parameters):
-            params_bind[p_name] = params[i]
-
-        qc = self._qc.bind_parameters(params_bind)
-        job = self._backend.run(transpile(qc, self._backend))
-        counts = job.result().get_counts()
-
-        self._probabilities = np.zeros(2**self._num_qubits)
-        for i in range(2**self._num_qubits):
-            str_bin_i = to_str_bin(i, self._num_qubits)
-            p = counts.get(str_bin_i, 0)
-            #print(p)
-            self._probabilities[i] = p/1024.
-        #print(self._probabilities)
-        self._probabilities = self._probabilities.reshape([2 for _ in range(self._num_qubits)])
-
-        probabilities = torch.from_numpy(self._probabilities)
-        results = self.get_measurement_results(probabilities)
-
-        if len(results) == 1:
-            return results[0]
-
-        #output must be a torch.tensor form
-        try:
-            results = torch.stack(results, 0)
-        except:
-            raise ValueError(f'You can not have multiple measurements with different shapes!!')
-
-        return results
+        raise NotImplementedError
 
 
     def get_measurement_results(self, probabilities):
@@ -261,18 +188,51 @@ class HardwareBackend():
         results = []
         for meas in self._measurements:
             if meas.return_type is Expectation:
-                axes = list(range(self._num_qubits))
-                axes = [x for x in axes if x not in meas.obs.qubits]
-                #print(axes)
-                #print(probabilities)
+
+                if isinstance(meas.obs, list):
+                    observables_axes = []
+                    observables_eigens = []
+                    for ob in meas.obs:
+                        observables_axes.extend(ob.qubits)
+                        eigen = torch.from_numpy(ob.eigvals)
+                        observables_eigens.append(eigen)
+
+                    # must be in order from small to large
+                    if not sorted(observables_axes) == observables_axes:
+                        raise ValueError(f'Please put the measurement observables in order! Current order is: {observables_axes}')
+                    axes = list(range(self._num_qubits))
+                    axes = [x for x in axes if x not in observables_axes]
+
+                    for _ in range(len(observables_eigens) - 1):
+                        # print("deal with ?th gate: ", i)
+                        eigenvals = observables_eigens.pop(-1)
+                        applied_eigen = observables_eigens.pop(-1)
+                        eigenvals = torch.outer(applied_eigen, eigenvals)
+                        observables_eigens.append(eigenvals)
+
+                    eigenvals = observables_eigens[0]
+
+
+                else:
+                    axes = list(range(self._num_qubits))
+                    axes = [x for x in axes if x not in meas.obs.qubits]
+                    #print(axes)
+                    #print(probabilities)
+
+                    eigenvals = meas.obs.eigvals
+                    eigenvals = torch.from_numpy(eigenvals)
+
+
+
                 if len(axes) != 0:
                     result = torch.sum(probabilities, dim=axes)
                 else:
                     result = probabilities
-                eigenvals = meas.obs.eigvals
-                eigenvals = torch.from_numpy(eigenvals)
+
                 #print(eigenvals)
                 #print(result)
+                result = result.view(-1)
+                eigenvals = eigenvals.view(-1)
                 result = result@eigenvals
                 result = result.unsqueeze(dim=0)
                 results.append(result)
@@ -335,6 +295,178 @@ class HardwareBackend():
         return the device used for calculation, GPU or CPU
         '''
         return self._device
+
+
+
+class TorchExecute(torch.autograd.Function):
+    '''
+    Custom autograd functions for parameter-shift method to provide compatibility of backpropagtion in PyTorch ML function. Use 'Function.apply' to run the function, where any arguments can be set as long as having the same format as the 'forward' function.
+    '''
+
+    @staticmethod
+    def forward(ctx, input_kwargs, *input_params):  # pylint: disable=arguments-differ
+        '''
+        forawrd function
+        '''
+
+        ctx.data_type = input_params[0].dtype
+        backend = input_kwargs["backend"]
+        ctx.backend = backend
+        ctx.device = backend.device
+        ctx.all_params = input_params
+        ctx.jacobian = input_kwargs["jacobian"]
+
+        return backend.execute(*input_params)
+
+    @staticmethod
+    def backward(ctx, dy_):  # pylint: disable=arguments-differ
+        '''
+        backward function
+        '''
+
+        #print(dy_)
+        dyy = torch.as_tensor(dy_, dtype=ctx.data_type, device = ctx.device)
+        jac = ctx.jacobian(ctx.all_params)
+        vjp = dyy @ jac
+        vjp = torch.unbind(vjp.view(-1))
+
+        return (None,) + tuple(vjp)
+
+def to_str_bin(x, n_qubits):
+    r'''
+    converting a decimal number into binary format.
+
+    **Example**
+
+    .. code-block:: python3
+        x = 3
+        n_qubits = 3
+        >>> dec_to_bin(3, 3)
+        '011'
+    '''
+    # pylint: disable=invalid-name
+
+    n = bin(x)[2:]
+    n = n.zfill(n_qubits)
+    result = [ix for ix in n]
+    #print(result)
+    return ''.join(result)
+
+
+
+class HardwareBackend_qiskit(HardwareBackend):
+    r'''
+    Class for Real IBMQ quantum computer backend.
+
+    Args:
+        backend (string): Name of the computation backend -- ``jax`` or ``pytorch``
+        circuit (.Circuit): Circuit to be computed.
+
+    '''
+
+
+    # pylint: disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
+    def __init__(self, backend, circuit):
+        super().__init__(backend, circuit)
+
+        self._gate_to_qiskit = {
+            "I": self.get_I_qiskit,
+            "Hadamard": self.get_Hadamard_qiskit,
+            "PauliX": self.get_PauliX_qiskit,
+            "PauliY": self.get_PauliY_qiskit,
+            "PauliZ": self.get_PauliZ_qiskit,
+            "S": self.get_S_qiskit,
+            "T": self.get_T_qiskit,
+            "SX": self.get_SX_qiskit,
+            "CNOT": self.get_CNOT_qiskit,
+            "CZ": self.get_CZ_qiskit,
+            "CY": self.get_CY_qiskit,
+            "SWAP": self.get_SWAP_qiskit,
+            "CSWAP": self.get_CSWAP_qiskit,
+            "Toffoli": self.get_Toffoli_qiskit,
+            "RX": self.get_RX_qiskit,
+            "RY": self.get_RY_qiskit,
+            "RZ": self.get_RZ_qiskit,
+            "Rot": self.get_Rot_qiskit,
+            "PhaseShift": self.get_PhaseShift_qiskit,
+            "ControlledPhaseShift": self.get_ControlledPhaseShift_qiskit,
+            "CRX": self.get_CRX_qiskit,
+            "CRY": self.get_CRY_qiskit,
+            "CRZ": self.get_CRZ_qiskit,
+        }
+
+        self._qc = qiskit_QuantumCircuit(self._num_qubits, 0)
+        self._params_count = 0
+        self._quantum_parameters = []
+
+        for operator in circuit.operators:
+            name = operator.name
+            qubits = operator.qubits
+            self._gate_to_qiskit[name](qubits)
+
+        # TODO: need to make sure each qubit only has one measurement! probs measurement measure selected qubits or all qubits
+
+        for measurement in self._measurements:
+            if measurement.return_type is Expectation:
+                if isinstance(measurement.obs, list):
+                    for ob in measurement.obs:
+                        rotations.extend(ob.diagonalizing_gates())
+                else:
+                    rotations.extend(measurement.obs.diagonalizing_gates())
+
+            elif measurement.return_type is Probability:
+                pass
+
+            else:
+                raise ValueError(f'hardware backend do not support {measurement.return_type} measurement!')
+
+        for operator in rotations:
+            name = operator.name
+            qubits = operator.qubits
+            self._gate_to_qiskit[name](qubits)
+
+        self._qc.measure_all()
+
+        provider = IBMQ.get_provider('ibm-q')
+        #self._backend = provider.get_backend('ibmq_qasm_simulator')
+        self._backend = provider.get_backend('ibmq_belem')
+
+        #from qiskit import Aer, transpile
+        #self._backend = Aer.get_backend("aer_simulator_statevector")
+
+    def real_execute(self, *params):
+        r'''
+        '''
+        params_bind = dict()
+        for i, p_name in enumerate(self._quantum_parameters):
+            params_bind[p_name] = params[i]
+
+        qc = self._qc.bind_parameters(params_bind)
+        job = self._backend.run(transpile(qc, self._backend), shots=self._num_shots)
+        counts = job.result().get_counts()
+
+        self._probabilities = np.zeros(2**self._num_qubits)
+        for i in range(2**self._num_qubits):
+            str_bin_i = to_str_bin(i, self._num_qubits)
+            p = counts.get(str_bin_i, 0)
+            #print(p)
+            self._probabilities[i] = p/self._num_shots
+        #print(self._probabilities)
+        self._probabilities = self._probabilities.reshape([2 for _ in range(self._num_qubits)])
+
+        probabilities = torch.from_numpy(self._probabilities)
+        results = self.get_measurement_results(probabilities)
+
+        if len(results) == 1:
+            return results[0]
+
+        #output must be a torch.tensor form
+        try:
+            results = torch.stack(results, 0)
+        except:
+            raise ValueError(f'You can not have multiple measurements with different shapes!!')
+
+        return results
 
     def get_I_qiskit(self, qubits):
         '''
@@ -530,56 +662,412 @@ class HardwareBackend():
 
         raise NotImplementedError
 
-class TorchExecute(torch.autograd.Function):
-    '''
-    Custom autograd functions for parameter-shift method to provide compatibility of backpropagtion in PyTorch ML function. Use 'Function.apply' to run the function, where any arguments can be set as long as having the same format as the 'forward' function.
-    '''
 
-    @staticmethod
-    def forward(ctx, input_kwargs, *input_params):  # pylint: disable=arguments-differ
-        '''
-        forawrd function
-        '''
 
-        ctx.data_type = input_params[0].dtype
-        backend = input_kwargs["backend"]
-        ctx.backend = backend
-        ctx.device = backend.device
-        ctx.all_params = input_params
-        ctx.jacobian = input_kwargs["jacobian"]
 
-        return backend.execute(*input_params)
 
-    @staticmethod
-    def backward(ctx, dy_):  # pylint: disable=arguments-differ
-        '''
-        backward function
-        '''
-
-        #print(dy_)
-        dyy = torch.as_tensor(dy_, dtype=ctx.data_type, device = ctx.device)
-        jac = ctx.jacobian(ctx.all_params)
-        vjp = dyy @ jac
-        vjp = torch.unbind(vjp.view(-1))
-
-        return (None,) + tuple(vjp)
-
-def to_str_bin(x, n_qubits):
+class HardwareBackend_quafu(HardwareBackend):
     r'''
-    converting a decimal number into binary format.
+    Class for quafu IBMQ quantum computer backend.
 
-    **Example**
+    Args:
+        backend (string): Name of the computation backend -- ``jax`` or ``pytorch``
+        circuit (.Circuit): Circuit to be computed.
 
-    .. code-block:: python3
-        x = 3
-        n_qubits = 3
-        >>> dec_to_bin(3, 3)
-        '011'
     '''
-    # pylint: disable=invalid-name
 
-    n = bin(x)[2:]
-    n = n.zfill(n_qubits)
-    result = [ix for ix in n]
-    #print(result)
-    return ''.join(result)
+
+    # pylint: disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
+    def __init__(self, backend, circuit):
+        super().__init__(backend, circuit)
+
+        self._gate_to_quafu = {
+            "I": self.get_I_quafu,
+            "Hadamard": self.get_Hadamard_quafu,
+            "PauliX": self.get_PauliX_quafu,
+            "PauliY": self.get_PauliY_quafu,
+            "PauliZ": self.get_PauliZ_quafu,
+            "S": self.get_S_quafu,
+            "T": self.get_T_quafu,
+            "SX": self.get_SX_quafu,
+            "CNOT": self.get_CNOT_quafu,
+            "CZ": self.get_CZ_quafu,
+            "CY": self.get_CY_quafu,
+            "SWAP": self.get_SWAP_quafu,
+            "CSWAP": self.get_CSWAP_quafu,
+            "Toffoli": self.get_Toffoli_quafu,
+            "RX": self.get_RX_quafu,
+            "RY": self.get_RY_quafu,
+            "RZ": self.get_RZ_quafu,
+            "Rot": self.get_Rot_quafu,
+            "PhaseShift": self.get_PhaseShift_quafu,
+            "ControlledPhaseShift": self.get_ControlledPhaseShift_quafu,
+            "CRX": self.get_CRX_quafu,
+            "CRY": self.get_CRY_quafu,
+            "CRZ": self.get_CRZ_quafu,
+        }
+
+        user = User()
+        user.save_apitoken("gl5X6QkgJS5n6728FhtAEr07FqpdHumdM8WmJzrrMHA.9JzMwUzM3czN2EjOiAHelJCL1cDN6ICZpJye.9JiN1IzUIJiOicGbhJCLiQ1VKJiOiAXe0Jye")
+        from quafu import Task
+        self._task = Task()
+        self._task.load_account()
+        self._task.config(backend="ScQ-P10", shots=self._num_shots, compile=True, priority=2)
+
+
+
+        # TODO: need to make sure each qubit only has one measurement! probs measurement measure selected qubits or all qubits
+
+        self._rotations = []
+        for measurement in self._measurements:
+            if measurement.return_type is Expectation:
+                if isinstance(measurement.obs, list):
+                    for ob in measurement.obs:
+                        self._rotations.extend(ob.diagonalizing_gates())
+                else:
+                    self._rotations.extend(measurement.obs.diagonalizing_gates())
+
+            elif measurement.return_type is Probability:
+                pass
+
+            else:
+                raise ValueError(f'hardware backend do not support {measurement.return_type} measurement!')
+
+
+    def _update_parameters(self, *params):
+        #print(len(params))
+        '''
+        Update the parameters of trainable gate according to new input parameters. The new input parameters are passed to this function when the `compiledCircuit` is called.
+
+        Args:
+            params (array): Array of the new parameters.
+
+        **Example**
+
+        .. code-block:: python3
+
+            def circuitDef(*params):
+                qai.RX(params[0], qubits=[1])
+                qai.Hadamard(qubits=[0])
+                qai.CNOT(qubits=[0,1])
+                qai.RY(params[1], qubits=[0])
+                return qai.expval(qai.PauliZ(qubits=[0]))
+            #compile the quantum circuit
+            circuit = qai.Circuit(circuitDef, 2, 0.54, 0.12)
+            my_compilecircuit = circuit.compilecircuit(backend="jax")
+    
+        Compiled circuit will called this function and evaluate the circuit based on the updated parameters:
+
+        >>> my_compilecircuit(0.54, 0.12)
+        [DeviceArray(-9.4627275e-09, dtype=float32)]
+
+        '''
+
+        # print("_update_parameters: ", params, len(params))
+        count = 0
+        # print(self._operatorparams, len(self._operatorparams))
+
+        for idx, trnblepars in self._trainableparams.items():
+            len_tp = len(trnblepars)
+            # print(len_tp)
+            # print(count)
+            # print(len(params))
+            # print(params)
+            # print(idx, self._operatorparams[idx],trnblepars)
+
+            if len_tp > 0:
+                #for i in range(len_tp):# trnblepars is list of indices of trainable parameters of the gate
+                for i in range(len_tp):
+                    pos = trnblepars[i]
+                    # print(self._operatorparams[idx])
+                    # print(self._operatorparams[idx][i])
+                    # print(params[count+i].requires_grad)
+
+                    # print(idx, pos, count, i, len(params), len(self._operatorparams[idx]))
+
+                    self._operatorparams[idx][pos] = params[count + i]
+                count = count + len_tp
+                #print("count:  ", count)
+        if len(params) != count:
+            raise ValueError(f'Error!!!! number of parameters are not matched!! required {count} but {len(params)} are given')
+
+
+    def _parser_circuit(self):
+        '''
+        Get tensor, name and parameters of each gate from the `Circuit` for ``Wave function vector method``.
+        '''
+
+
+        for idx, trnblepars in self._trainableparams.items():
+
+            len_tp = len(trnblepars)
+
+            if len_tp > 0:
+                name = self._operatorname[idx]
+                parameters = self._operatorparams[idx]
+                parameters = [par.item() for par in parameters]
+                qubits = self._appliedqubits[idx]
+                self._gate_to_quafu[name](qubits, parameters)
+
+            else:
+                name = self._operatorname[idx]
+                qubits = self._appliedqubits[idx]
+                self._gate_to_quafu[name](qubits)
+
+        for operator in self._rotations:
+            name = operator.name
+            #print(name)
+            qubits = operator.qubits
+            self._gate_to_quafu[name](qubits)
+
+        measures = range(self._num_qubits)
+        cbits = range(self._num_qubits)
+        self._qc.measure(measures,  cbits=cbits)
+
+
+
+
+    def real_execute(self, *params):
+        r'''
+        '''
+        if len(params) == 0:
+            pass
+            
+        else:
+            self._update_parameters(*params)
+
+
+        self._qc = quafu_QuantumCircuit(self._num_qubits)
+
+        self._parser_circuit()
+
+        #res = self._task.send(self._qc)
+        from quafu import simulate
+        res = simulate(self._qc, output="amplitudes")
+
+        amplitudes = res.amplitudes
+        #print(res)
+        #print(amplitudes)
+
+
+        # self._probabilities = np.zeros(2**self._num_qubits)
+        # for i in range(2**self._num_qubits):
+        #     str_bin_i = to_str_bin(i, self._num_qubits)
+        #     p = amplitudes.get(str_bin_i, 0)
+        #     #print(p)
+        #     self._probabilities[i] = p
+        # #print(self._probabilities)
+
+        self._probabilities = amplitudes
+
+        self._probabilities = self._probabilities.reshape([2 for _ in range(self._num_qubits)])
+
+        probabilities = torch.from_numpy(self._probabilities)
+        results = self.get_measurement_results(probabilities)
+
+        if len(results) == 1:
+            return results[0]
+
+        #output must be a torch.tensor form
+        try:
+            results = torch.stack(results, 0)
+        except:
+            raise ValueError(f'You can not have multiple measurements with different shapes!!')
+
+        return results
+
+
+    def get_I_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+
+        pass
+
+    
+    def get_Hadamard_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+        qubit = qubits[0]
+        self._qc.h(qubit)
+
+    
+    def get_PauliX_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+        qubit = qubits[0]
+        self._qc.x(qubit)
+
+    
+    def get_PauliY_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+        qubit = qubits[0]
+        self._qc.y(qubit)
+
+    
+    def get_PauliZ_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+        qubit = qubits[0]
+        self._qc.z(qubit)
+
+    
+    def get_S_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+        qubit = qubits[0]
+        self._qc.s(qubit)
+
+    
+    def get_T_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+        qubit = qubits[0]
+        self._qc.t(qubit)
+
+    
+    def get_SX_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+        qubit = qubits[0]
+        self._qc.sx(qubit)
+
+    
+    def get_CNOT_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+        qubit = qubits[0]
+        self._qc.cnot(qubit)
+
+    
+    def get_CZ_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+        qubit = qubits[0]
+        self._qc.cz(qubit)
+
+    
+    def get_CY_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+        qubit = qubits[0]
+        self._qc.cy(qubit)
+
+    
+    def get_SWAP_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+        qubit_0 = qubits[0]
+        qubit_1 = qubits[1]
+        self._qc.swap(qubit_0, qubit_1)
+
+    
+    def get_CSWAP_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+
+        qubit_0 = qubits[0]
+        qubit_1 = qubits[1]
+        self._qc.swap(qubit_0, qubit_1)
+
+    
+    def get_Toffoli_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+
+        qubit_0 = qubits[0]
+        qubit_1 = qubits[1]
+        self._qc.toffoli(qubit_0, qubit_1)
+        
+
+    
+    def get_RX_quafu(self, qubits, params):
+        '''
+        Get corresponding qiskit object.
+        '''
+
+        qubit = qubits[0]
+        param = params[0]
+        self._qc.rx(qubit, param)
+
+    
+    def get_RY_quafu(self, qubits, params):
+        '''
+        Get corresponding qiskit object.
+        '''
+
+        qubit = qubits[0]
+        param = params[0]
+        self._qc.ry(qubit, param)
+
+    
+    def get_RZ_quafu(self, qubits, params):
+        '''
+        Get corresponding qiskit object.
+        '''
+        qubit = qubits[0]
+        param = params[0]
+        self._qc.rz(qubit, param)
+
+    
+    def get_Rot_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+
+        raise NotImplementedError
+
+    
+    def get_PhaseShift_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+
+        qubit = qubits[0]
+        self._qc.p(qubit)
+
+    
+    def get_ControlledPhaseShift_quafu(self, qubits):
+        '''
+        Get ControlledPhaseShift tensor
+        '''
+
+        raise NotImplementedError
+
+    
+    def get_CRX_quafu(self, qubits):
+        '''
+        Get CRX tensor
+        '''
+
+        raise NotImplementedError
+
+    
+    def get_CRY_quafu(self, qubits):
+        '''
+        Get CRY tensor
+        '''
+
+        raise NotImplementedError
+
+    
+    def get_CRZ_quafu(self, qubits):
+        '''
+        Get corresponding qiskit object.
+        '''
+
+        raise NotImplementedError

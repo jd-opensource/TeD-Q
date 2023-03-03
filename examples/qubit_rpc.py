@@ -78,7 +78,7 @@ circuit = qai.Circuit(circuitDef, n_qubits, parameter_shapes = parameter_shapes)
 # my_compilecircuit = circuit.compilecircuit(backend="pytorch")
 
 from jdtensorpath import JDOptTN as jdopttn
-slicing_opts = {'target_size':2**28, 'repeats':1, 'target_num_slices':2, 'contract_parallel':'distributed_GPU'} #'distributed_CPU'
+slicing_opts = {'target_size':2**28, 'repeats':1, 'target_num_slices':2, 'contract_parallel':'distributed_CPU'} #'distributed_CPU'
 hyper_opt = {'methods':['kahypar'], 'max_time':120, 'max_repeats':1, 'search_parallel':False, 'slicing_opts':slicing_opts}
 my_compilecircuit = circuit.compilecircuit(backend="pytorch", use_jdopttn=jdopttn, hyper_opt = hyper_opt, tn_simplify = False)
 
@@ -110,7 +110,7 @@ parameters = torch.rand(((q_depth+1)*2,n_qubits), requires_grad= True)
 from jdtensorpath.distributed import run_distributed_slicing_parallel
 
 # num_nodes, rank=0, gpus_per_cpu=0, cpus_per_node=1, master_addr='localhost', master_port='8119'
-run = run_distributed_slicing_parallel(num_nodes, rank, gpus_per_cpu, cpus_per_node)
+run = run_distributed_slicing_parallel(num_nodes, rank, gpus_per_cpu, cpus_per_node, master_addr, master_port)
 run.set_cost_func(cost_1)
 
 from torch import optim
