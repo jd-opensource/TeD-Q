@@ -1011,6 +1011,12 @@ class RX(GateBase):
         """
         return RX(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
 
+    def generator(self):
+        r'''
+        '''
+        # in format of [factor, operator]
+        return [-0.5, PauliX(qubits=self.qubits, do_queue=False)]
+
 
 class RY(GateBase):
     r"""
@@ -1061,6 +1067,12 @@ class RY(GateBase):
 
         """
         return RY(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
+    
+    def generator(self):
+        r'''
+        '''
+        # in format of [factor, operator]
+        return [-0.5, PauliY(qubits=self.qubits, do_queue=False)]
 
 
 class RZ(GateBase):
@@ -1111,6 +1123,12 @@ class RZ(GateBase):
 
         """
         return RZ(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
+
+    def generator(self):
+        r'''
+        '''
+        # in format of [factor, operator]
+        return [-0.5, PauliZ(qubits=self.qubits, do_queue=False)]
 
 
 class Rot(GateBase):
@@ -1265,6 +1283,13 @@ class PhaseShift(GateBase):
         """
         return PhaseShift(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
 
+    def generator(self):
+        r'''
+        '''
+        g_matrix = np.array([[0., 0.], [0., 1.]], dtype=np.complex64)
+        # in format of [factor, operator]
+        return [1, Unitary(matrix=g_matrix, qubits=self.qubits, do_queue=False)]
+
 
 class ControlledPhaseShift(GateBase):
     r"""ControlledPhaseShift gate.
@@ -1339,6 +1364,20 @@ class ControlledPhaseShift(GateBase):
 
         """
         return ControlledPhaseShift(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
+
+    def generator(self):
+        r'''
+        '''
+        g_matrix = np.array(
+            [
+            [0., 0., 0., 0.], 
+            [0., 0., 0., 0.],
+            [0., 0., 0., 0.],
+            [0., 0., 0., 1.],
+            ], dtype=np.complex64)
+        g_matrix = g_matrix.reshape([2,2,2,2])
+        # in format of [factor, operator]
+        return [1, Unitary(matrix=g_matrix, qubits=self.qubits, do_queue=False)]
 
 
 class CRX(GateBase):
@@ -1428,6 +1467,19 @@ class CRX(GateBase):
         """
         return CRX(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
 
+    def generator(self):
+        r'''
+        '''
+        g_matrix = np.array(
+            [
+            [0., 0., 0., 0.],
+            [0., 0., 0., 0.],
+            [0., 0., 0., 1.],
+            [0., 0., 1., 0.],
+            ], dtype=np.complex64)
+        g_matrix = g_matrix.reshape([2,2,2,2])
+        # in format of [factor, operator]
+        return [-0.5, Unitary(matrix=g_matrix, qubits=self.qubits, do_queue=False)]
 
 class CRY(GateBase):
     r"""controlled-RY gate.
@@ -1514,6 +1566,19 @@ class CRY(GateBase):
         """
         return CRY(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
 
+    def generator(self):
+        r'''
+        '''
+        g_matrix = np.array(
+            [
+            [0.+0.j, 0.-0.j, 0.+0.j, 0.-0.j],
+            [0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j],
+            [0.+0.j, 0.-0.j, 0.+0.j, 0.-1.j],
+            [0.+0.j, 0.+0.j, 0.+1.j, 0.+0.j],
+            ], dtype=np.complex64)
+        g_matrix = g_matrix.reshape([2,2,2,2])
+        # in format of [factor, operator]
+        return [-0.5, Unitary(matrix=g_matrix, qubits=self.qubits, do_queue=False)]
 
 class CRZ(GateBase):
     r"""controlled-RZ gate.
@@ -1603,6 +1668,20 @@ class CRZ(GateBase):
 
         """
         return CRZ(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
+
+    def generator(self):
+        r'''
+        '''
+        g_matrix = np.array(
+            [
+            [ 0.,  0.,  0.,  0.],
+            [ 0., -0.,  0., -0.],
+            [ 0.,  0.,  1.,  0.],
+            [ 0., -0.,  0., -1.]，
+            ], dtype=np.complex64)
+        g_matrix = g_matrix.reshape([2,2,2,2])
+        # in format of [factor, operator]
+        return [-0.5, Unitary(matrix=g_matrix, qubits=self.qubits, do_queue=False)]
 
 # TODO: add checking is it really a unitary matrix, see pennylane code
 class Unitary(GateBase, ObservableBase):
