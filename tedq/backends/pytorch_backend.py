@@ -467,25 +467,26 @@ class PyTorchBackend(CompiledCircuit):
                         result = probs_tensor
                     results.append(result)
 
-                    state_after_measures = []
-                    meas_states = []
-                    len_meas_qubits = len(meas.qubits)
-                    size = 2**len_meas_qubits
-                    for i in range(size):
-                        meas_state = dec_to_bin(i, size)
-                        loc_dict = dict(zip(meas.qubits, meas_state))
-                        element_selector = tuple(loc_dict.get(ix, slice(None)) for ix in range(self._num_qubits))
-                        tmpt = state[element_selector]
+                    if meas.after_state:
+                        state_after_measures = []
+                        meas_states = []
+                        len_meas_qubits = len(meas.qubits)
+                        size = 2**len_meas_qubits
+                        for i in range(size):
+                            meas_state = dec_to_bin(i, size)
+                            loc_dict = dict(zip(meas.qubits, meas_state))
+                            element_selector = tuple(loc_dict.get(ix, slice(None)) for ix in range(self._num_qubits))
+                            tmpt = state[element_selector]  
 
-                        # not change data in state vector
-                        state_after_measure = tmpt
-                        #print(state_after_measure)
+                            # not change data in state vector
+                            state_after_measure = tmpt
+                            #print(state_after_measure) 
 
-                        state_after_measure = rescale_state(state_after_measure)
-                        state_after_measures.append(state_after_measure)
-                        meas_states.append(''.join([str(s) for s in meas_state]))
+                            state_after_measure = rescale_state(state_after_measure)
+                            state_after_measures.append(state_after_measure)
+                            meas_states.append(''.join([str(s) for s in meas_state]))   
 
-                    self._states_after_measurement = dict(zip(meas_states, state_after_measures))
+                        self._states_after_measurement = dict(zip(meas_states, state_after_measures))
 
             if meas.return_type is State:
                 results.append(state)

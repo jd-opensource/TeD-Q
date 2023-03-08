@@ -1011,6 +1011,7 @@ class RX(GateBase):
         """
         return RX(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
 
+    @property
     def generator(self):
         r'''
         '''
@@ -1068,6 +1069,7 @@ class RY(GateBase):
         """
         return RY(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
     
+    @property
     def generator(self):
         r'''
         '''
@@ -1124,6 +1126,7 @@ class RZ(GateBase):
         """
         return RZ(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
 
+    @property
     def generator(self):
         r'''
         '''
@@ -1283,6 +1286,7 @@ class PhaseShift(GateBase):
         """
         return PhaseShift(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
 
+    @property
     def generator(self):
         r'''
         '''
@@ -1365,6 +1369,7 @@ class ControlledPhaseShift(GateBase):
         """
         return ControlledPhaseShift(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
 
+    @property
     def generator(self):
         r'''
         '''
@@ -1467,6 +1472,7 @@ class CRX(GateBase):
         """
         return CRX(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
 
+    @property
     def generator(self):
         r'''
         '''
@@ -1566,6 +1572,7 @@ class CRY(GateBase):
         """
         return CRY(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
 
+    @property
     def generator(self):
         r'''
         '''
@@ -1669,6 +1676,8 @@ class CRZ(GateBase):
         """
         return CRZ(-self.parameters[0], qubits=self.qubits, do_queue=do_queue)
 
+    
+    @property
     def generator(self):
         r'''
         '''
@@ -1677,7 +1686,7 @@ class CRZ(GateBase):
             [ 0.,  0.,  0.,  0.],
             [ 0., -0.,  0., -0.],
             [ 0.,  0.,  1.,  0.],
-            [ 0., -0.,  0., -1.]，
+            [ 0., -0.,  0., -1.],
             ], dtype=np.complex64)
         g_matrix = g_matrix.reshape([2,2,2,2])
         # in format of [factor, operator]
@@ -1706,6 +1715,10 @@ class Unitary(GateBase, ObservableBase):
         self._user_defined_matrix = matrix
 
         super().__init__(qubits=qubits, do_queue=do_queue, **kwargs)
+
+        D,V = np.linalg.eig(A)
+        self._diagonalizing_matrix = np.linalg.inv(V)
+        self._eigvals = D
 
 
     def get_matrix(self):
@@ -1751,8 +1764,26 @@ class Unitary(GateBase, ObservableBase):
             list(~.GateBase): A list of operators that diagonalize Hadamard in
             the computational basis.
         """
-        raise ValueError(f'User defined Unitary doesnot have diagonalizing_gates function!!')
+        return Unitary(self._diagonalizing_matrix, qubits=self.qubits, do_queue=do_queue)
+        #raise ValueError(f'User defined Unitary doesnot have diagonalizing_gates function!!')
 
+    @property
+    def eigvals(self):
+        r"""
+        Eigenvalues of an operator instance.
+
+        **Example:**
+
+        >>> import tedq as qai
+        >>> A = qai.RZ(0.5, qubits = [1])
+        >>> A.eigvals
+        array([0.96891242-0.24740396j, 0.96891242+0.24740396j])
+
+        Returns:
+            array: eigvals representation.
+        """
+
+        return self._eigvals
 
 def complex_conjugate(ts):
     '''

@@ -55,10 +55,12 @@ class OperatorBase(abc.ABC):
             raise ValueError(
                 f'{self._name}: # of qubits this operator applied on is not matched! expected {self.num_qubits} qubits, but got {len(qubits)}')
 
+        self._instance_id = next(
+            self._count
+        )  # each time add one; int: index of the Operator in the circuit queue
+
         if do_queue:
-            self._instance_id = next(
-                self._count
-            )  # each time add one; int: index of the Operator in the circuit queue
+
             _active_warehouse = GlobalVariables.get_value("global_deque")
             if bool(_active_warehouse):
                 if bool(_active_warehouse[-1]):
@@ -191,9 +193,10 @@ class OperatorBase(abc.ABC):
         Returns: 
             int: unique id of the operator.
         """
+        return self._instance_id
         if self._do_queue is True:
             return self._instance_id
-        print("Caution!!! This operator is not in the queue!")
+        #print("Caution!!! This operator is not in the queue!")
         return None
 
     @property

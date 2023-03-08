@@ -38,11 +38,12 @@ class QuantumMeasurement:
         qubits (int): Optional, default is ``None``. The qubit(s) that the measurement applied to. If ``obs`` is not ``None``, this can not be specified.
 
     """
-    def __init__(self, return_type, obs=None, qubits=None, do_queue=True):
+    def __init__(self, return_type, obs=None, qubits=None, do_queue=True, after_state=False):
     
         self.return_type = return_type
         self.obs = obs
         self.do_queue = do_queue
+        self.after_state = after_state
 
         if qubits is not None and obs is not None:
             raise ValueError("If an observable is provied, the qubit(s) can not be specified!")
@@ -170,7 +171,7 @@ def sample(observable, num_shots, do_queue=True):
     raise NotImplementedError
 
 
-def probs(qubits=None, do_queue=True):
+def probs(qubits=None, do_queue=True, after_state=False):
     r"""
     Compute the probability of each computational basis state
 

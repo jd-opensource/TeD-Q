@@ -23,12 +23,20 @@ This module contains the :class:`Circuit` class for converting user input quantu
 from tedq.backends import PyTorchBackend, JaxBackend, QUDIOBackend, HardwareBackend_qiskit, HardwareBackend_quafu
 from tedq.QInterpreter.operators.ops_abc import GateBase
 from tedq.QInterpreter.operators.measurement import QuantumMeasurement
+from tedq.QInterpreter.operators.measurement import probs as Probs
 from tedq.quantum_error import QuantumStorageError, QuantumCircuitError
 from .storage_base import CircuitStorage
 
+from collections import defaultdict
+
+import numpy as np
+import torch
+import itertools
+
+
 
 class Circuit:
-    r"""
+    r"""Circuit
     Converting user-define quantum function into tedq quantum circuit
     """
     def __init__(self, func, num_qubits, *params, **kwargs):
@@ -88,6 +96,114 @@ class Circuit:
                 f'Input number of qubits is not large enough! '
                 f'Maximum qubit number of operators is {maximum_qubit_number+1}'
                 )
+
+    # TODO: 放到一個另外的獨立文件
+    def cycabc(self, numarg):
+        r'''
+        the fuck
+        numarg: List of integer
+        '''
+        # lateral layer of each qubit
+        q_layers = list(0 for i in range(self._num_qubits))
+
+        # vertical layer for natural gradient descent
+        layers = defaultdict(list) # default值以一個list()方法產生
+
+        obs_list = defaultdict(list)
+        factors_list = defaultdict(list)
+        # Only the first one is useful
+        num_params = defaultdict(list)
+
+        num = 0
+        for op in self._operators:
+
+
+            tp = op.trainable_params
+            len_tp = len(tp)
+
+
+            op_qubits = op.qubits
+
+            # update layer id
+            new_layer_id = max([q_layers[i] for i in op_qubits])
+
+
+
+            # one parameter operator
+            if len_tp == 1:
+                # parameter need to be used for natural gradient
+                if num in numarg:
+                    gen = op.generator
+                    s = gen[0]
+                    obs = gen[1]
+
+                    obs_list[new_layer_id].append(obs)
+                    factors_list[new_layer_id].append(s)
+                    # Only the first one is useful
+                    num_params[new_layer_id].append(num)
+
+                    # update layer id
+                    new_layer_id = new_layer_id + 1
+
+            # quantum gate with more than one parameters can not use quantum natural gradient!
+            if len_tp > 1:
+                tmpt_num = range(num, num+len_tp)
+                num_in_numarg = [n in numarg for n in tmpt_num]
+                if any(num_in_numarg):
+                    raise ValueError("quantum gate with more than one parameters can not use quantum natural gradient!")
+
+            # update layer id
+            for i in op_qubits:
+                q_layers[i] = new_layer_id
+
+            layers[new_layer_id].append(op)
+
+
+            num = num + len_tp
+
+        return (layers, obs_list, factors_list, num_params)
+
+    def gen_circuits(self, numarg):
+        r'''
+        '''
+
+        circuits_list = []
+
+        (layers, obs_list, factors_list, num_params) = self.cycabc(numarg)
+
+        for layer_id, obs in obs_list.items():
+            operators = []
+            qubits = []
+            measurements = []
+
+            num_param = num_params[layer_id][0]
+            factors = factors_list[layer_id]
+
+            for i in range(layer_id+1):
+                operators.extend(layers[i])
+            for ob in obs:
+                # rotations
+                operators.extend(ob.diagonalizing_gates())
+                qubits.extend(ob.qubits)
+
+            # TODO: use qubits=qubits, but need to change marginal_prob code
+            # since qubits=qubits will destroy some wires, and then the
+            # marginal_prob will not be corrected
+            measurements.append(Probs(qubits=None, do_queue=False))#qubits=qubits
+
+            quantum_circuit_dict = {'operators':operators, 
+            'measurements':measurements, 'init_state':self._init_state}
+
+            #print(operators)
+            circuit = Circuit(quantum_circuit_dict, self._num_qubits)
+
+            circuits_list.append((circuit, obs, factors, num_param))
+
+
+        return circuits_list
+
+
+
 
 
     def maximum_qubit_num(self):
@@ -178,6 +294,115 @@ class Circuit:
         
         return string
 
+    def metric_tensor(self, circuits_list, *parameters):  
+
+        gs = []
+        for (circuit, obs, factors, num_param) in circuits_list:
+            #print(num_param)
+            compiled_circuit = circuit.compilecircuit(backend="pytorch")
+            probs = compiled_circuit(*parameters[:num_param])   
+
+            scale = np.outer(factors, factors)
+            scale = torch.from_numpy(scale)
+            #print(scale, probs) 
+
+            
+            #print(obs)
+            g = scale * cov_matrix(probs, obs)
+            gs.append(g)
+            #print("g: ",g)
+
+        # create the block diagonal metric tensor
+        return torch.block_diag(*(g for g in gs))
+
+def cov_matrix(prob, obs, diag_approx=False):
+    r'''
+    '''
+    prob = prob.type(torch.complex64)
+    variances = []
+
+    # diagonal variances
+    #print(obs)
+    for i, o in enumerate(obs):
+        eigvals = o.eigvals
+        eigvals = torch.from_numpy(eigvals)
+        eigvals = eigvals.type(torch.complex64)
+        qubits = o.qubits
+        p = marginal_prob(prob, qubits)
+
+        res = torch.dot(eigvals**2, p) - (torch.dot(eigvals, p)) ** 2
+        variances.append(res)
+
+    cov = torch.diag(torch.tensor(variances))
+
+    if diag_approx:
+        return cov
+
+    for i, j in itertools.combinations(range(len(obs)), r=2):
+        o1 = obs[i]
+        o2 = obs[j]
+
+        qubits_1 = o1.qubits
+        qubits_2 = o2.qubits
+
+        shared_qubits = list(qubits_1)
+        shared_qubits.extend(qubits_2)
+
+        l1 = o1.eigvals
+        l1 = torch.from_numpy(l1)
+        l1 = l1.type(torch.complex64)
+        l2 = o2.eigvals
+        l2 = torch.from_numpy(l2)
+        l2 = l2.type(torch.complex64)
+        l12 = torch.kron(l1, l2)
+
+        p1 = marginal_prob(prob, qubits_1)
+        p2 = marginal_prob(prob, qubits_2)
+        p12 = marginal_prob(prob, shared_qubits)
+
+        res = torch.dot(l12, p12) - torch.dot(l1, p1) * torch.dot(l2, p2)
+
+        cov[i, j] = cov[i, j] + res
+        cov[j, i] = cov[j, i] + res
+
+    #print("cov: ", cov)
+    return cov
+
+
+def marginal_prob(prob, axis):
+    """Compute the marginal probability given a joint probability distribution expressed as a tensor.
+    Each random variable corresponds to a dimension.
+    If the distribution arises from a quantum circuit measured in computational basis, each dimension
+    corresponds to a wire. For example, for a 2-qubit quantum circuit `prob[0, 1]` is the probability of measuring the
+    first qubit in state 0 and the second in state 1.
+    Args:
+        prob (tensor_like): 1D tensor of probabilities. This tensor should of size
+            ``(2**N,)`` for some integer value ``N``.
+        axis (list[int]): the axis for which to calculate the marginal
+            probability distribution
+    Returns:
+        tensor_like: the marginal probabilities, of
+        size ``(2**len(axis),)``
+    **Example**
+    >>> x = tf.Variable([1, 0, 0, 1.], dtype=tf.float64) / np.sqrt(2)
+    >>> marginal_prob(x, axis=[0, 1])
+    <tf.Tensor: shape=(4,), dtype=float64, numpy=array([0.70710678, 0.        , 0.        , 0.70710678])>
+    >>> marginal_prob(x, axis=[0])
+    <tf.Tensor: shape=(2,), dtype=float64, numpy=array([0.70710678, 0.70710678])>
+    """
+    prob = prob.view(-1)
+    num_wires = int(np.log2(len(prob)))
+
+    if num_wires == len(axis):
+        return prob
+
+    inactive_wires = tuple(set(range(num_wires)) - set(axis))
+    prob = torch.reshape(prob, [2] * num_wires)
+    prob = torch.sum(prob, axis=inactive_wires)
+    return torch.flatten(prob)
+
+
+
 def generate_parameters(parameter_shapes):
     r'''
     Generate random parameters from input parameter shapes
@@ -189,3 +414,5 @@ def generate_parameters(parameter_shapes):
         params.append(param)
     params = tuple(params)
     return params
+
+
