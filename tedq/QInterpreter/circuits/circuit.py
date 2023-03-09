@@ -331,6 +331,7 @@ def cov_matrix(prob, obs, diag_approx=False):
         p = marginal_prob(prob, qubits)
 
         res = torch.dot(eigvals**2, p) - (torch.dot(eigvals, p)) ** 2
+        res = res.type(torch.float)
         variances.append(res)
 
     cov = torch.diag(torch.tensor(variances))

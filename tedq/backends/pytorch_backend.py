@@ -419,6 +419,8 @@ class PyTorchBackend(CompiledCircuit):
                     axes = list(range(self._num_qubits))
                     result = torch.tensordot(torch.conj(state), meas_state, dims=(axes, axes))
                     result = torch.squeeze(result.real)
+
+                    result = torch.squeeze(result)
                     results.append(result)
 
                 # can measure hermitian (user defined Unitary) with arbitary number of qubits
@@ -452,6 +454,8 @@ class PyTorchBackend(CompiledCircuit):
                     axes = list(range(self._num_qubits))
                     tmpt = torch.tensordot(torch.conj(state), tmpt, dims=(axes, axes))
                     result = torch.squeeze(tmpt.real)
+
+                    result = torch.squeeze(result)
                     results.append(result)
 
             if meas.return_type is Probability:
@@ -877,6 +881,9 @@ class PyTorchBackend(CompiledCircuit):
             _js, 
             _c
         ]  # [[c, js], [js, c]]
+        # must use torch.cat before using torch.as_tensor,
+        # otherwise backward() will stop here
+        # and lose connection in backpropagation graph between return tensor and input parameter
         data = torch.cat(data, dim=0)
         return_tensor = torch.as_tensor(data, dtype=tcomplex,
             device = cls._device)
@@ -904,6 +911,9 @@ class PyTorchBackend(CompiledCircuit):
             _s, 
             _c
         ]  # [[c, -s], [s, c]]
+        # must use torch.cat before using torch.as_tensor,
+        # otherwise backward() will stop here
+        # and lose connection in backpropagation graph between return tensor and input parameter
         data = torch.cat(data, dim=0)
         return_tensor = torch.as_tensor(data, dtype=tcomplex,
             device = cls._device)
@@ -924,10 +934,15 @@ class PyTorchBackend(CompiledCircuit):
         #    device = self._device)
         data = [
             _p, 
-            0.0, 
-            0.0, 
+            tensor([0.0]), 
+            tensor([0.0]), 
             _p.conj_physical() # Make sure the conjugate information will be reserved while transferring tensor using RPC or storing tensor
+            #_p.conj()
         ]  # [[p, 0], [0, p.conjugate()]]
+        # must use torch.cat before using torch.as_tensor,
+        # otherwise backward() will stop here
+        # and lose connection in backpropagation graph between return tensor and input parameter
+        data = torch.cat(data, dim=0)
         return_tensor = torch.as_tensor(data, dtype=tcomplex,
             device = cls._device)
         #return_tensor[0] = data[0]
@@ -958,6 +973,9 @@ class PyTorchBackend(CompiledCircuit):
             torch.exp(-0.5j * (theta - omega)) * _s, 
             torch.exp(0.5j * (theta + omega)) * _c
         ]
+        # must use torch.cat before using torch.as_tensor,
+        # otherwise backward() will stop here
+        # and lose connection in backpropagation graph between return tensor and input parameter
         data = torch.cat(data, dim=0)
         return_tensor = torch.as_tensor(data, dtype=tcomplex,
             device = cls._device)
@@ -976,11 +994,15 @@ class PyTorchBackend(CompiledCircuit):
         #return_tensor = torch.zeros([4], dtype=tcomplex,
         #    device = self._device)
         data = [
-            1.0,
-            0.0,
-            0.0,
+            tensor([1.0]),
+            tensor([0.0]),
+            tensor([0.0]),
             torch.exp(1.0j * phi),
         ]  # [[1, 0], [0, torch.exp(1j * phi)]]
+        # must use torch.cat before using torch.as_tensor,
+        # otherwise backward() will stop here
+        # and lose connection in backpropagation graph between return tensor and input parameter
+        data = torch.cat(data, dim=0)
         return_tensor = torch.as_tensor(data, dtype=tcomplex,
             device = cls._device)
         #return_tensor[3] = data[3]
@@ -1001,23 +1023,27 @@ class PyTorchBackend(CompiledCircuit):
         #return_tensor = torch.zeros([16], dtype=tcomplex,
         #    device = self._device)
         data = [
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
+            tensor([1.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([1.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([1.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
             torch.exp(1.0j * phi),
         ]  # [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, torch.exp(1j * phi)]]
+        # must use torch.cat before using torch.as_tensor,
+        # otherwise backward() will stop here
+        # and lose connection in backpropagation graph between return tensor and input parameter
+        data = torch.cat(data, dim=0)
         return_tensor = torch.as_tensor(data, dtype=tcomplex,
             device = cls._device)
         #return_tensor[15] = data[15]
@@ -1040,23 +1066,27 @@ class PyTorchBackend(CompiledCircuit):
         #return_tensor = torch.zeros([16], dtype=tcomplex,
         #    device = self._device)
         data = [
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
+            tensor([1.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([1.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
             _c,
             _js,
-            0.0,
-            0.0,
+            tensor([0.0]),
+            tensor([0.0]),
             _js,
             _c,
         ]  # [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, c, js], [0, 0, js, c]]
+        # must use torch.cat before using torch.as_tensor,
+        # otherwise backward() will stop here
+        # and lose connection in backpropagation graph between return tensor and input parameter
+        data = torch.cat(data, dim=0)
         return_tensor = torch.as_tensor(data, dtype=tcomplex,
             device = cls._device)
         #return_tensor[10] = data[10]
@@ -1082,23 +1112,27 @@ class PyTorchBackend(CompiledCircuit):
         #return_tensor = torch.zeros([16], dtype=tcomplex,
         #    device = self._device)
         data = [
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
+            tensor([1.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([1.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
             _c,
             -_s,
-            0.0,
-            0.0,
+            tensor([0.0]),
+            tensor([0.0]),
             _s,
             _c,
         ]  # [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, c, -s], [0, 0, s, c]]
+        # must use torch.cat before using torch.as_tensor,
+        # otherwise backward() will stop here
+        # and lose connection in backpropagation graph between return tensor and input parameter
+        data = torch.cat(data, dim=0)
         return_tensor = torch.as_tensor(data, dtype=tcomplex,
             device = cls._device)
         #return_tensor[10] = data[10]
@@ -1121,23 +1155,27 @@ class PyTorchBackend(CompiledCircuit):
         theta = paramslist[0]
         #return_tensor = torch.zeros([16], dtype=tcomplex, device = self._device)
         data = [
-            1,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
+            tensor([1.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([1.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
             torch.exp(-0.5j * theta),
-            0.0,
-            0.0,
-            0.0,
-            0.0,
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
+            tensor([0.0]),
             torch.exp(0.5j * theta),
         ]
+        # must use torch.cat before using torch.as_tensor,
+        # otherwise backward() will stop here
+        # and lose connection in backpropagation graph between return tensor and input parameter
+        data = torch.cat(data, dim=0)
         return_tensor = torch.as_tensor(data, dtype=tcomplex,
             device = cls._device)
         #return_tensor[10] = data[10]
