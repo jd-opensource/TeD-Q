@@ -906,7 +906,7 @@ def gen_tensor_networks(num_qubits, operators, appliedqubits, measurements):
             _current_ids = _current_ids + len_qbts
 
             tmpt_input_indices=[]
-            for i in reverse(range(len_qbts)):
+            for i in reversed(range(len_qbts)):
                 tmpt_input_indices.append(get_symbol(_current_ids - i))
             for i in range(len_qbts):
                 tmpt_input_indices.append(get_symbol(_layer_ids[qbts[i]]))                
@@ -999,7 +999,7 @@ def gen_tensor_networks(num_qubits, operators, appliedqubits, measurements):
                     len_qbts = len(qbts)
                     _current_ids_i = _current_ids_i + len_qbts
                     tmpt_input_indices=[]
-                    for i in reverse(range(len_qbts)):
+                    for i in reversed(range(len_qbts)):
                         tmpt_input_indices.append(get_symbol(_current_ids_i - i))
                     for i in range(len_qbts):
                         tmpt_input_indices.append(get_symbol(_layer_ids_i[qbts[i]]))
